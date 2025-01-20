@@ -5,48 +5,43 @@ import "./platform_admin.sol";
 
 contract VotingPlatform is PlatformAdmin {
     struct Proposal {
-        string proposalHash;
         string ipfsHash;
         string title;
-        uint256 voteCount;
-        uint256 startTime;
+        uint256 votedYes;
+        uint256 votedNo;
         uint256 endTime;
         bool executed;
-        mapping(address => bool) hasVoted;
     }
 
     struct Voter {
         bool isRegistered;
         uint256 votingPower;
-        uint256 lastVoteTime;
     }
 
     mapping(address => Voter) public voters;
-    mapping(uint256 => Proposal) public proposals;
+    mapping(string => Proposal) public proposals;
+    mapping(string => mapping (address => bool)) hasVoted;
 
-    uint256 public proposalCount;
-    uint256 public minVotingDelay;
     uint256 public votingPeriod;
 
-    constructor(uint256 _minVotingDelay, uint256 _votingPeriod) {
-        minVotingDelay = _minVotingDelay;
+    constructor(uint256 _votingPeriod) {
         votingPeriod = _votingPeriod;
     }
 
     event VoterRegistered(address indexed voter);
 
     event ProposalCreated(
-        uint256 indexed proposalId,
+        string indexed ipfsHash,
         string title,
         address proposer
     );
 
     event VoteCast(
-        uint256 indexed proposalId,
+        string indexed ipfsHash,
         address indexed voter,
         bool support
     );
-    event ProposalExecuted(uint256 indexed proposalId);
+    event ProposalExecuted(string indexed ipfsHash);
 
 
     modifier onlyRegisteredVoter() {
@@ -62,40 +57,42 @@ contract VotingPlatform is PlatformAdmin {
     }
 
     function createProposal(
+        string memory _ipfsHash,
         string memory _title,
         uint256 _startTime
-    ) public onlyRegisteredVoter returns (uint256) {
-        require(
-            _startTime >= block.timestamp + minVotingDelay,
-            "Start time too soon"
+
+    ) public onlyRegisteredVoter returns (string memory) {
+        proposals[_ipfsHash] = Proposal(
+            _ipfsHash,
+            _title,
+            0,
+            0,
+            _startTime + votingPeriod,
+            false
         );
 
-        uint256 proposalId = proposalCount++;
-        Proposal storage proposal = proposals[proposalId];
-        proposal.title = _title;
-        proposal.startTime = _startTime;
-        proposal.endTime = _startTime + votingPeriod;
-
-        emit ProposalCreated(proposalId, _title, msg.sender);
-        return proposalId;
+        emit ProposalCreated(_ipfsHash, _title, msg.sender);
+        return _ipfsHash;
     }
 
     function castVote(
-        uint256 _proposalId,
+        string memory __ipfsHash,
         bool _support
     ) public onlyRegisteredVoter {
-        Proposal storage proposal = proposals[_proposalId];
-        require(block.timestamp >= proposal.startTime, "Voting not started");
-        require(block.timestamp <= proposal.endTime, "Voting ended");
-        require(!proposal.hasVoted[msg.sender], "Already voted");
+        mapping(address => bool) storage votersList = hasVoted[__ipfsHash];
+        Proposal storage proposal = proposals[__ipfsHash];
+        require(block.timestamp >= proposal.endTime-votingPeriod, "Voting ended");
+        require(block.timestamp < proposal.endTime, "Voting ended");
+        require(!votersList[msg.sender], "Already voted");
 
         if (_support) {
-            proposal.voteCount += voters[msg.sender].votingPower;
+            proposal.votedYes += voters[msg.sender].votingPower;
+        } else {
+            proposal.votedNo += voters[msg.sender].votingPower;
         }
 
-        proposal.hasVoted[msg.sender] = true;
-        voters[msg.sender].lastVoteTime = block.timestamp;
+        votersList[msg.sender] = true;
 
-        emit VoteCast(_proposalId, msg.sender, _support);
+        emit VoteCast(__ipfsHash, msg.sender, _support);
     }
 }
