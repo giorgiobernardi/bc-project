@@ -61,7 +61,7 @@ contract VotingPlatform is PlatformAdmin {
         string memory _title,
         uint256 _startTime
 
-    ) public onlyRegisteredVoter returns (string memory) {
+    ) public returns (string memory) {
         proposals[_ipfsHash] = Proposal(
             _ipfsHash,
             _title,
