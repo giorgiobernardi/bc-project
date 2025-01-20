@@ -21,6 +21,10 @@ contract VotingPlatform is PlatformAdmin {
     mapping(address => Voter) public voters;
     mapping(string => Proposal) public proposals;
     mapping(string => mapping (address => bool)) hasVoted;
+    // TODO refactor hasVoted, we don't need to store all this data! a simple mapping(string => address[]) should be enough
+    // this way we can store the proposal hash and the addresses of the voters that have voted
+    // I don't want to break everything so I'll leave that for later
+    string[] proposalHashes;
 
     uint256 public votingPeriod;
 
@@ -70,10 +74,22 @@ contract VotingPlatform is PlatformAdmin {
             _startTime + votingPeriod,
             false
         );
-
+        proposalHashes.push(_ipfsHash);
         emit ProposalCreated(_ipfsHash, _title, msg.sender);
         return _ipfsHash;
     }
+
+ function getAllProposals() public view returns (Proposal[] memory) {
+    Proposal[] memory allProposals = new Proposal[](proposalHashes.length);
+    
+    for (uint i = 0; i < proposalHashes.length; i++) {
+        string memory hash = proposalHashes[i];
+        Proposal memory proposal = proposals[hash];
+        allProposals[i] = proposal;
+    }
+
+    return allProposals;
+}
 
     function castVote(
         string memory __ipfsHash,
