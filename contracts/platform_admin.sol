@@ -6,6 +6,8 @@ contract PlatformAdmin {
     mapping(address => mapping(address => bool)) public adminApprovals;
     mapping(address => uint256) public pendingAdminApprovalCount;
     mapping(address => uint256) public adminProposalTime;
+    mapping(string => bool) public approvedDomains;
+    string[] public domainList;
 
     address public admin;
     uint256 public adminCount;
@@ -15,9 +17,10 @@ contract PlatformAdmin {
     event AdminProposed(address indexed proposer, address indexed newAdmin);
     event AdminApproved(address indexed approver, address indexed newAdmin);
     event AdminRemoved(address indexed admin);
+    event DomainAdded(string domain);
 
-    constructor() {
-        admins[msg.sender] = true;
+    constructor(address _admin) {
+        admins[_admin] = true;
         adminCount = 1;
     }
 
@@ -79,5 +82,16 @@ contract PlatformAdmin {
         adminCount--;
 
         emit AdminRemoved(_admin);
+    }
+
+    function addDomain(string memory _domain) external onlyAdmin {
+        require(!approvedDomains[_domain], "Domain already approved");
+        approvedDomains[_domain] = true;
+        domainList.push(_domain);
+        emit DomainAdded(_domain);
+    }
+
+    function getDomains() external view returns (string[] memory) {
+        return domainList;
     }
 }

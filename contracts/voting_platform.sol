@@ -15,9 +15,9 @@ contract VotingPlatform is PlatformAdmin {
     }
 
     struct Voter {
-        bool isRegistered;
         uint256 votingPower;
         string[] emailDomains;
+        bool isRegistered;
     }
 
     mapping(address => Voter) public voters;
@@ -27,7 +27,7 @@ contract VotingPlatform is PlatformAdmin {
 
     uint256 public votingPeriod;
 
-    constructor(uint256 _votingPeriod) {
+    constructor(uint256 _votingPeriod, address _admin) PlatformAdmin(_admin) {
         votingPeriod = _votingPeriod;
     }
 
@@ -59,15 +59,16 @@ contract VotingPlatform is PlatformAdmin {
                 return true;
             }
         }
-        
         return false;
     }
 
     function registerWithDomain(string memory _domain) public {
-        string memory domain = _domain;
+        require(approvedDomains[_domain], "Domain not approved");
+        //require(!voters[msg.sender].isRegistered, "Already registered");
+        
         voters[msg.sender].isRegistered = true;
         voters[msg.sender].votingPower = 1;
-        voters[msg.sender].emailDomains.push(domain);
+        voters[msg.sender].emailDomains.push(_domain);
         emit VoterRegistered(msg.sender);
     }
 
@@ -83,7 +84,12 @@ contract VotingPlatform is PlatformAdmin {
         string memory _title,
         uint256 _startTime,
         string[] memory _allowedDomains
-    ) public returns (string memory) {
+    ) public onlyAdmin returns (string memory) {
+        // Validate domains
+        for(uint i = 0; i < _allowedDomains.length; i++) {
+            require(approvedDomains[_allowedDomains[i]], "Domain not approved");
+        }
+        
         proposals[_ipfsHash] = Proposal(
             _ipfsHash,
             _title,
@@ -100,46 +106,46 @@ contract VotingPlatform is PlatformAdmin {
 
     function getAllProposals() public view returns (Proposal[] memory) {
     // Count matching proposals first
-    uint256 matchingCount = 0;
-    string[] memory voterDomains = voters[msg.sender].emailDomains;
-    
-    for (uint i = 0; i < proposalHashes.length; i++) {
-        string memory hash = proposalHashes[i];
-        Proposal memory proposal = proposals[hash];
+        uint256 matchingCount = 0;
+        string[] memory voterDomains = voters[msg.sender].emailDomains;
         
-        // Check if any voter domain matches proposal domains
-        for (uint j = 0; j < voterDomains.length; j++) {
-            for (uint k = 0; k < proposal.allowedDomains.length; k++) {
-                if (keccak256(bytes(voterDomains[j])) == keccak256(bytes(proposal.allowedDomains[k]))) {
-                    matchingCount++;
-                    break;
+        for (uint i = 0; i < proposalHashes.length; i++) {
+            string memory hash = proposalHashes[i];
+            Proposal memory proposal = proposals[hash];
+            
+            // Check if any voter domain matches proposal domains
+            for (uint j = 0; j < voterDomains.length; j++) {
+                for (uint k = 0; k < proposal.allowedDomains.length; k++) {
+                    if (keccak256(bytes(voterDomains[j])) == keccak256(bytes(proposal.allowedDomains[k]))) {
+                        matchingCount++;
+                        break;
+                    }
                 }
             }
         }
-    }
-    
-    // Create array of correct size
-    Proposal[] memory filteredProposals = new Proposal[](matchingCount);
-    uint256 currentIndex = 0;
-    
-    // Fill array with matching proposals
-    for (uint i = 0; i < proposalHashes.length; i++) {
-        string memory hash = proposalHashes[i];
-        Proposal memory proposal = proposals[hash];
         
-        // Check if any voter domain matches proposal domains
-        for (uint j = 0; j < voterDomains.length; j++) {
-            for (uint k = 0; k < proposal.allowedDomains.length; k++) {
-                if (keccak256(bytes(voterDomains[j])) == keccak256(bytes(proposal.allowedDomains[k]))) {
-                    filteredProposals[currentIndex] = proposal;
-                    currentIndex++;
-                    break;
+        // Create array of correct size
+        Proposal[] memory filteredProposals = new Proposal[](matchingCount);
+        uint256 currentIndex = 0;
+        
+        // Fill array with matching proposals
+        for (uint i = 0; i < proposalHashes.length; i++) {
+            string memory hash = proposalHashes[i];
+            Proposal memory proposal = proposals[hash];
+            
+            // Check if any voter domain matches proposal domains
+            for (uint j = 0; j < voterDomains.length; j++) {
+                for (uint k = 0; k < proposal.allowedDomains.length; k++) {
+                    if (keccak256(bytes(voterDomains[j])) == keccak256(bytes(proposal.allowedDomains[k]))) {
+                        filteredProposals[currentIndex] = proposal;
+                        currentIndex++;
+                        break;
+                    }
                 }
             }
         }
+        return filteredProposals;   
     }
-    return filteredProposals;
-}
 
     function castVote(
         string memory __ipfsHash,
