@@ -17,7 +17,6 @@ contract VotingPlatform is PlatformAdmin {
     struct Voter {
         uint256 votingPower;
         string[] emailDomains;
-        bool isRegistered;
     }
 
     mapping(address => Voter) public voters;
@@ -47,11 +46,6 @@ contract VotingPlatform is PlatformAdmin {
     event ProposalExecuted(string indexed ipfsHash);
 
 
-    modifier onlyRegisteredVoter() {
-        require(voters[msg.sender].isRegistered, "Not a registered voter");
-        _;
-    }
-
     function isVoterRegistered(string memory _domain) public view returns (bool) {
         string[] memory domains = voters[msg.sender].emailDomains;
         for (uint i = 0; i < domains.length; i++) {
@@ -64,19 +58,9 @@ contract VotingPlatform is PlatformAdmin {
 
     function registerWithDomain(string memory _domain) public {
         require(approvedDomains[_domain], "Domain not approved");
-        //require(!voters[msg.sender].isRegistered, "Already registered");
-        
-        voters[msg.sender].isRegistered = true;
         voters[msg.sender].votingPower = 1;
         voters[msg.sender].emailDomains.push(_domain);
         emit VoterRegistered(msg.sender);
-    }
-
-    function registerVoter(address _voter) public onlyAdmin {
-        require(!voters[_voter].isRegistered, "Voter already registered");
-        voters[_voter].isRegistered = true;
-        voters[_voter].votingPower = 1;
-        emit VoterRegistered(_voter);
     }
 
     function createProposal(
@@ -84,7 +68,7 @@ contract VotingPlatform is PlatformAdmin {
         string memory _title,
         uint256 _startTime,
         string[] memory _allowedDomains
-    ) public onlyAdmin returns (string memory) {
+    ) public returns (string memory) {
         // Validate domains
         for(uint i = 0; i < _allowedDomains.length; i++) {
             require(approvedDomains[_allowedDomains[i]], "Domain not approved");
@@ -150,7 +134,7 @@ contract VotingPlatform is PlatformAdmin {
     function castVote(
         string memory __ipfsHash,
         bool _support
-    ) public onlyRegisteredVoter {
+    ) public {
         mapping(address => bool) storage votersList = hasVoted[__ipfsHash];
         Proposal storage proposal = proposals[__ipfsHash];
         require(block.timestamp >= proposal.endTime-votingPeriod, "Voting ended");
@@ -166,6 +150,7 @@ contract VotingPlatform is PlatformAdmin {
                 }
             }
         }
+        
         require(isDomainAllowed, "Voter domain not allowed for this proposal");
 
         if (_support) {
