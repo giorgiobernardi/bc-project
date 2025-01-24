@@ -11,17 +11,17 @@ contract VotingPlatform is PlatformAdmin {
         uint256 votedNo;
         uint256 endTime;
         bool executed;
-        string[] allowedDomains;
+        string domain;
     }
 
     struct Voter {
         uint256 votingPower;
-        string[] emailDomains;
+        string emailDomain;
     }
 
     mapping(address => Voter) public voters;
     mapping(string => Proposal) public proposals;
-    mapping(string => mapping (address => bool)) hasVoted;
+    mapping(string => mapping(address => bool)) hasVoted;
     string[] proposalHashes;
 
     uint256 public votingPeriod;
@@ -45,35 +45,30 @@ contract VotingPlatform is PlatformAdmin {
     );
     event ProposalExecuted(string indexed ipfsHash);
 
-
-    function isVoterRegistered(string memory _domain) public view returns (bool) {
-        string[] memory domains = voters[msg.sender].emailDomains;
-        for (uint i = 0; i < domains.length; i++) {
-            if (keccak256(bytes(domains[i])) == keccak256(bytes(_domain))) {
-                return true;
-            }
-        }
-        return false;
-    }
+    // function isVoterRegistered(string memory _domain) public view returns (bool) {
+    //     string[] memory domains = voters[msg.sender].domain;
+    //     for (uint i = 0; i < domains.length; i++) {
+    //         if (keccak256(bytes(domains[i])) == keccak256(bytes(_domain))) {
+    //             return true;
+    //         }
+    //     }
+    //     return false;
+    // }
 
     function registerWithDomain(string memory _domain) public {
         require(approvedDomains[_domain], "Domain not approved");
         voters[msg.sender].votingPower = 1;
-        voters[msg.sender].emailDomains.push(_domain);
+        // voters[msg.sender].emailDomains.push(_domain);
         emit VoterRegistered(msg.sender);
     }
 
     function createProposal(
         string memory _ipfsHash,
         string memory _title,
-        uint256 _startTime,
-        string[] memory _allowedDomains
+        uint256 _startTime // TODO: get it from an Oracle
     ) public returns (string memory) {
-        // Validate domains
-        for(uint i = 0; i < _allowedDomains.length; i++) {
-            require(approvedDomains[_allowedDomains[i]], "Domain not approved");
-        }
-        
+        Voter storage voter = voters[msg.sender];
+
         proposals[_ipfsHash] = Proposal(
             _ipfsHash,
             _title,
@@ -81,7 +76,7 @@ contract VotingPlatform is PlatformAdmin {
             0,
             _startTime + votingPeriod,
             false,
-            _allowedDomains
+            voter.emailDomain
         );
         proposalHashes.push(_ipfsHash);
         emit ProposalCreated(_ipfsHash, _title, msg.sender);
@@ -89,69 +84,45 @@ contract VotingPlatform is PlatformAdmin {
     }
 
     function getAllProposals() public view returns (Proposal[] memory) {
-    // Count matching proposals first
+        // Count matching proposals first
         uint256 matchingCount = 0;
-        string[] memory voterDomains = voters[msg.sender].emailDomains;
-        
-        for (uint i = 0; i < proposalHashes.length; i++) {
-            string memory hash = proposalHashes[i];
-            Proposal memory proposal = proposals[hash];
-            
-            // Check if any voter domain matches proposal domains
-            for (uint j = 0; j < voterDomains.length; j++) {
-                for (uint k = 0; k < proposal.allowedDomains.length; k++) {
-                    if (keccak256(bytes(voterDomains[j])) == keccak256(bytes(proposal.allowedDomains[k]))) {
-                        matchingCount++;
-                        break;
-                    }
-                }
-            }
-        }
-        
-        // Create array of correct size
-        Proposal[] memory filteredProposals = new Proposal[](matchingCount);
-        uint256 currentIndex = 0;
-        
+        string memory voterDomain = voters[msg.sender].emailDomain;
+        Proposal[] memory filteredProposals = new Proposal[](
+            proposalHashes.length
+        );
+        uint currentIndex = 0;
         // Fill array with matching proposals
         for (uint i = 0; i < proposalHashes.length; i++) {
             string memory hash = proposalHashes[i];
             Proposal memory proposal = proposals[hash];
-            
+
             // Check if any voter domain matches proposal domains
-            for (uint j = 0; j < voterDomains.length; j++) {
-                for (uint k = 0; k < proposal.allowedDomains.length; k++) {
-                    if (keccak256(bytes(voterDomains[j])) == keccak256(bytes(proposal.allowedDomains[k]))) {
-                        filteredProposals[currentIndex] = proposal;
-                        currentIndex++;
-                        break;
-                    }
-                }
+            if (
+                keccak256(bytes(voterDomain)) ==
+                keccak256(bytes(proposal.domain))
+            ) {
+                filteredProposals[currentIndex] = proposal;
+                currentIndex++;
             }
         }
-        return filteredProposals;   
+        return filteredProposals;
     }
 
-    function castVote(
-        string memory __ipfsHash,
-        bool _support
-    ) public {
+    function castVote(string memory __ipfsHash, bool _support) public {
         mapping(address => bool) storage votersList = hasVoted[__ipfsHash];
         Proposal storage proposal = proposals[__ipfsHash];
-        require(block.timestamp >= proposal.endTime-votingPeriod, "Voting ended");
+        require(
+            block.timestamp >= proposal.endTime - votingPeriod,
+            "Voting ended"
+        ); // TODO: review with Oracle in mind
         require(block.timestamp < proposal.endTime, "Voting ended");
         require(!votersList[msg.sender], "Already voted");
-        
-        bool isDomainAllowed = false;
-        for (uint j = 0; j < voters[msg.sender].emailDomains.length && !isDomainAllowed; j++) {
-            string memory voterDomain = voters[msg.sender].emailDomains[j];
-            for (uint i = 0; i < proposal.allowedDomains.length && !isDomainAllowed; i++) {
-                if (keccak256(bytes(proposal.allowedDomains[i])) == keccak256(bytes(voterDomain))) {
-                    isDomainAllowed = true;
-                }
-            }
-        }
-        
-        require(isDomainAllowed, "Voter domain not allowed for this proposal");
+
+        require(
+            keccak256(bytes(proposal.domain)) ==
+                keccak256(bytes(voters[msg.sender].emailDomain)),
+            "Voter domain not allowed for this proposal"
+        );
 
         if (_support) {
             proposal.votedYes += voters[msg.sender].votingPower;
