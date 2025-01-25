@@ -94,4 +94,9 @@ contract PlatformAdmin {
     function getDomains() external view returns (string[] memory) {
         return domainList;
     }
+
+    function isDomainRegistered(string memory _domain) external view returns (bool) {
+        return approvedDomains[_domain];
+    }
+    
 }

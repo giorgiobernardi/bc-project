@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "./platform_admin.sol";
 
-contract VotingPlatform is PlatformAdmin {
+import "./token_claimer.sol";
+
+contract VotingPlatform is TokenClaimer {
     struct Proposal {
         string ipfsHash;
         string title;
@@ -26,7 +27,7 @@ contract VotingPlatform is PlatformAdmin {
 
     uint256 public votingPeriod;
 
-    constructor(uint256 _votingPeriod, address _admin) PlatformAdmin(_admin) {
+    constructor(uint256 _votingPeriod, address _admin) TokenClaimer(_admin) {
         votingPeriod = _votingPeriod;
     }
 
@@ -85,7 +86,6 @@ contract VotingPlatform is PlatformAdmin {
 
     function getAllProposals() public view returns (Proposal[] memory) {
         // Count matching proposals first
-        uint256 matchingCount = 0;
         string memory voterDomain = voters[msg.sender].emailDomain;
         Proposal[] memory filteredProposals = new Proposal[](
             proposalHashes.length
