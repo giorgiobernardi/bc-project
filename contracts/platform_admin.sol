@@ -6,7 +6,6 @@ contract PlatformAdmin {
     mapping(address => mapping(address => bool)) public adminApprovals;
     mapping(address => uint256) public pendingAdminApprovalCount;
     mapping(address => uint256) public adminProposalTime;
-    mapping(string => bool) public approvedDomains;
     string[] public domainList;
 
     address public admin;
@@ -24,7 +23,7 @@ contract PlatformAdmin {
         adminCount = 1;
     }
 
-    function isAdmin(address _account) external view returns (bool) {
+    function isAdmin(address _account) public view returns (bool) {
         return admins[_account];
     }
 
@@ -84,19 +83,26 @@ contract PlatformAdmin {
         emit AdminRemoved(_admin);
     }
 
-    function addDomain(string memory _domain) external onlyAdmin {
-        require(!approvedDomains[_domain], "Domain already approved");
-        approvedDomains[_domain] = true;
-        domainList.push(_domain);
-        emit DomainAdded(_domain);
-    }
+    
 
     function getDomains() external view returns (string[] memory) {
         return domainList;
     }
 
-    function isDomainRegistered(string memory _domain) external view returns (bool) {
-        return approvedDomains[_domain];
+    function isDomainRegistered(string memory _domain) internal view returns (bool) {
+        for (uint i = 0; i < domainList.length; i++) {
+            if(keccak256(bytes(domainList[i])) != keccak256(bytes(_domain))) {
+               return true;
+            }
+        }    
+        return false;
     }
-    
+  
+    function addDomain(string memory _domain) public onlyAdmin {
+        bool isRegistered = isDomainRegistered(_domain);
+        require(!isRegistered, "Domain already registered");
+
+        domainList.push(_domain);
+        emit DomainAdded(_domain);
+    }
 }

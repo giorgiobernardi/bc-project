@@ -6,9 +6,10 @@ import {SolRsaVerify} from "../libs/SolRsaVerify.sol";
 import {StringUtils} from "../libs/Strings.sol";
 import "./platform_admin.sol";
 
-contract TokenClaimer is PlatformAdmin {
+contract JWTValidator is PlatformAdmin {
  
- 
+    uint256 internal _tokenIdCounter;
+    
     using Base64 for string;
     using JsmnSolLib for string;
     using SolRsaVerify for *;
@@ -29,16 +30,17 @@ contract TokenClaimer is PlatformAdmin {
     error ExpectedEmailToBeAString();
     error UnknownKid(string kid);
 
-    constructor(address _admin) PlatformAdmin(_admin) {}
+    constructor(address _admin) PlatformAdmin(_admin){}
 
     // TODO: refactor addModulus so that onlyAdmin can call them, to do so,
     // make them internal and call them from the VotingPlatform contract! NOT SURE IF THAT'S HOW IT WORKS :))
-
+    // @Ulises to @Giorgio: It should suffice to use the onlyAdmin modifier in the method signature
     mapping(string kid => bytes) private modulo;
     string[] private keyIds;  // Track all key IDs
     string domain = "gmail.com";
+    
 
-    function addModulus(string memory kid, bytes memory modulus) external {
+    function addModulus(string memory kid, bytes memory modulus) external onlyAdmin {
         modulo[kid] = modulus;
         keyIds.push(kid);
     }
@@ -53,17 +55,6 @@ contract TokenClaimer is PlatformAdmin {
     
     function getModulus(string memory kid) public view returns (bytes memory) {
         return modulo[kid];
-    }
-
-    function claim(string memory _headerJson, string memory _payloadJson, bytes memory _signature, address _receiver)
-        public
-    {
-        string memory email = validateJwt(_headerJson, _payloadJson, _signature, _receiver);
-        if (!email.toSlice().endsWith(domain.toSlice())) {
-            revert InvalidDomain(email, domain);
-        }
-        bytes32 emailHash = keccak256(abi.encodePacked(email));
-    // TODO: IMPLEMENT CLAIM LOGIC
     }
 
     function validateJwt(
@@ -164,6 +155,8 @@ contract TokenClaimer is PlatformAdmin {
             i += 2;
         }
     }
+
+    
 
     function getRsaModulus(string memory kid) internal view returns (bytes memory modulus) {
         modulus = getModulus(kid);
