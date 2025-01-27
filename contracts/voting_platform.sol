@@ -232,14 +232,13 @@ contract VotingPlatform is JWTValidator {
     function login(
         string memory _headerJson,
         string memory _payloadJson,
-        bytes memory _signature,
-        address _sender
+        bytes memory _signature
     ) public view returns (bool) {
         string memory parsedEmail = validateJwt(
             _headerJson,
             _payloadJson,
             _signature,
-            _sender
+            msg.sender
         );
         bytes32 senderEmail = addressToEmail[msg.sender];
 
