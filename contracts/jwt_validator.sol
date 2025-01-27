@@ -4,6 +4,7 @@ import {Base64} from "../libs/Base64.sol";
 import {JsmnSolLib} from "../libs/JsmnSolLib.sol";
 import {SolRsaVerify} from "../libs/SolRsaVerify.sol";
 import {StringUtils} from "../libs/Strings.sol";
+
 import "./platform_admin.sol";
 
 import "hardhat/console.sol";
@@ -14,8 +15,8 @@ contract JWTValidator is PlatformAdmin {
     
     using Base64 for string;
     using JsmnSolLib for string;
-    using SolRsaVerify for *;
     using StringUtils for *;
+    using SolRsaVerify for *;
 
    error InvalidSignature(string message, bytes signature, bytes exponent, bytes modulus);
     error InvalidAudience(string aud, string expectedAudience);
@@ -68,10 +69,11 @@ contract JWTValidator is PlatformAdmin {
         address _receiver
     ) internal view returns (string memory) {
         console.log("Validating JWT");
+
         string memory headerBase64 = _headerJson.encode();
         string memory payloadBase64 = _payloadJson.encode();
-        console.log("Header: %s", headerBase64);
-        console.log("Payload: %s", payloadBase64);
+        console.log("HeaderJson: %s", _headerJson);
+        console.log("PayloadJson: %s", _payloadJson);
         StringUtils.slice[] memory slices = new StringUtils.slice[](2);
         slices[0] = headerBase64.toSlice();
         slices[1] = payloadBase64.toSlice();
@@ -95,13 +97,14 @@ contract JWTValidator is PlatformAdmin {
 
         // JWT nonce should be receiver to prevent frontrunning
         string memory senderBase64 = string(abi.encodePacked(_receiver)).encode();
+
         console.log("address: %s", _receiver);
         console.log("Sender: %s", senderBase64);
         console.log("Nonce: %s", nonce);
-        // if (senderBase64.strCompare(nonce) != 0) {
-        //     console.log("Invalid nonce");
-        //     revert InvalidNonce(nonce, _receiver);
-        // }
+        if (senderBase64.strCompare(nonce) != 0) {
+            console.log("Invalid nonce");
+            revert InvalidNonce(nonce, _receiver);
+        }
         console.log("Email: %s", email);
         return email;
     }
