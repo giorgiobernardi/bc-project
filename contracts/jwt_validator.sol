@@ -6,6 +6,8 @@ import {SolRsaVerify} from "../libs/SolRsaVerify.sol";
 import {StringUtils} from "../libs/Strings.sol";
 import "./platform_admin.sol";
 
+import "hardhat/console.sol";
+
 contract JWTValidator is PlatformAdmin {
  
     uint256 internal _tokenIdCounter;
@@ -37,11 +39,13 @@ contract JWTValidator is PlatformAdmin {
     // @Ulises to @Giorgio: It should suffice to use the onlyAdmin modifier in the method signature
     mapping(string kid => bytes) private modulo;
     string[] private keyIds;  // Track all key IDs
-    string domain = "gmail.com";
+    
     
 
-    function addModulus(string memory kid, bytes memory modulus) external onlyAdmin {
+    function addModulus(string memory kid, bytes memory modulus) external {
+        console.log("Adding modulus for kid: %s", kid);
         modulo[kid] = modulus;
+        console.log("Modulus added for kid: %s", kid);
         keyIds.push(kid);
     }
 
