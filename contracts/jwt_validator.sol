@@ -42,7 +42,7 @@ contract JWTValidator is PlatformAdmin {
     
     
 
-    function addModulus(string memory kid, bytes memory modulus) external {
+    function addModulus(string memory kid, bytes memory modulus) external onlyAdmin{
         console.log("Adding modulus for kid: %s", kid);
         modulo[kid] = modulus;
         console.log("Modulus added for kid: %s", kid);
