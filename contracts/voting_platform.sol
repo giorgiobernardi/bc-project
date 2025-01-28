@@ -2,8 +2,10 @@
 pragma solidity ^0.8.28;
 
 import "./jwt_validator.sol";
+import "hardhat/console.sol";
 
 contract VotingPlatform is JWTValidator {
+    
     using Base64 for string;
     using JsmnSolLib for string;
     using SolRsaVerify for *;
@@ -15,7 +17,7 @@ contract VotingPlatform is JWTValidator {
         uint256 votedYes;
         uint256 votedNo;
         uint256 endTime;
-        bool executed;
+        bool executed; // TODO: might not be needed, we just check endTime instead
         string domain;
     }
 
@@ -27,13 +29,13 @@ contract VotingPlatform is JWTValidator {
 
     mapping(address => Voter) public voters;
 
-    // Voter has a unique email associated throught which they can interact with the platform
+    // Voter has a unique email associated through which they can interact with the platform
     mapping(address => bytes32) private addressToEmail;
 
     // IPFS hash => Proposal
     mapping(string => Proposal) public proposals;
 
-    // Proposal ID => Email hash => Has voted ipfsHash => address[]
+    // Has voted ipfsHash => address[] of voters
     mapping(string => address[]) hasVoted;
 
     string[] proposalHashes;
@@ -78,13 +80,17 @@ contract VotingPlatform is JWTValidator {
     }
 
     modifier canVote(string memory _ipfsHash) {
+        console.log("Checking if can vote");
+        console.log("Checking if block.timestamp >= proposals[_ipfsHash].endTime - votingPeriod");
         require(
+            
             block.timestamp >= proposals[_ipfsHash].endTime - votingPeriod,
             "Voting not started yet"
         );
 
+        console.log("Checking if block.timestamp < proposals[_ipfsHash].endTime");
         require(
-            block.timestamp >= proposals[_ipfsHash].endTime - votingPeriod,
+            block.timestamp < proposals[_ipfsHash].endTime,
             "Voting ended"
         );
 
@@ -114,12 +120,13 @@ contract VotingPlatform is JWTValidator {
             _payload,
             _signature
         );
+        console.log("Parsed email: %s", parsedEmail);
         bytes32 encodedMail = keccak256(abi.encodePacked(parsedEmail));
-        
+        //console.log("Encoded email: %s", encodedMail);
         if (addressToEmail[msg.sender] != encodedMail) {
             addressToEmail[msg.sender] = encodedMail;
             voters[msg.sender].votingPower = 1;
-
+            console.log("Voter registered: %s", msg.sender);
             emit VoterRegistered(msg.sender);
         } else {
             revert("User already registered");
@@ -129,10 +136,9 @@ contract VotingPlatform is JWTValidator {
     function addProposer(address _voterAddr) public onlyAdmin {
         voters[_voterAddr].canPropose = true;
     }
-    function removePropose(address _voterAddr) public onlyAdmin {
+    function removeProposer(address _voterAddr) public onlyAdmin {
         voters[_voterAddr].canPropose = false;
     }
-
 
 
     function createProposal(
@@ -141,7 +147,7 @@ contract VotingPlatform is JWTValidator {
         uint256 _startTime
     ) public returns (string memory) { // only domain representant
 
-        // Check domain is approved
+        // Check if domain is approved
         
         require(voters[msg.sender].canPropose || isAdmin(msg.sender), "Not allowed to propose");
         Voter storage voter = voters[msg.sender];
@@ -151,11 +157,12 @@ contract VotingPlatform is JWTValidator {
             _title,
             0,
             0,
-            _startTime + votingPeriod,
+            block.timestamp + votingPeriod,
             false,
             voter.emailDomain
         );
-
+        console.log("Proposal created : %s",
+         proposals[_ipfsHash].ipfsHash);
         proposalHashes.push(_ipfsHash);
 
         emit ProposalCreated(_ipfsHash, _title, msg.sender);
@@ -187,23 +194,25 @@ contract VotingPlatform is JWTValidator {
     }
 
     function castVote(
-        string memory __ipfsHash,
+        string memory _ipfsHash,
         bool _support
-    ) public canVote(__ipfsHash) {
+    ) public canVote(_ipfsHash) {
+        console.log("Voting for proposal: %s", _ipfsHash);
+        Proposal storage proposal = proposals[_ipfsHash];
         
-        Proposal storage proposal = proposals[__ipfsHash];
-
         if (_support) {
+            console.log("Voted yes");
             proposal.votedYes += voters[msg.sender].votingPower;
         } else {
+            console.log("Voted no");
             proposal.votedNo += voters[msg.sender].votingPower;
         }
 
-        address[] storage votersList = hasVoted[__ipfsHash];
+        address[] storage votersList = hasVoted[_ipfsHash];
 
         votersList.push(msg.sender);
 
-        emit VoteCast(__ipfsHash, msg.sender, _support);
+        emit VoteCast(_ipfsHash, msg.sender, _support);
     }
 
     function parseJWT(

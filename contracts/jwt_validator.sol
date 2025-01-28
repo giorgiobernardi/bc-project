@@ -72,15 +72,15 @@ contract JWTValidator is PlatformAdmin {
 
         string memory headerBase64 = _headerJson.encode();
         string memory payloadBase64 = _payloadJson.encode();
-        console.log("HeaderJson: %s", _headerJson);
-        console.log("PayloadJson: %s", _payloadJson);
+        //console.log("HeaderJson: %s", _headerJson);
+        //console.log("PayloadJson: %s", _payloadJson);
         StringUtils.slice[] memory slices = new StringUtils.slice[](2);
         slices[0] = headerBase64.toSlice();
         slices[1] = payloadBase64.toSlice();
         string memory message = ".".toSlice().join(slices);
-        console.log("Message: %s", message);
+        //console.log("Message: %s", message);
         string memory kid = parseHeader(_headerJson);
-        console.log("Kid: %s", kid);
+        //console.log("Kid: %s", kid);
         bytes memory exponent = getRsaExponent(kid);
         bytes memory modulus = getRsaModulus(kid);
 
