@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import "./jwt_validator.sol";
 import "hardhat/console.sol";
 
+
 contract VotingPlatform is JWTValidator {
     
     using Base64 for string;
@@ -11,14 +12,15 @@ contract VotingPlatform is JWTValidator {
     using SolRsaVerify for *;
     using StringUtils for *;
 
+    // removed "executed", we never use it and we can simply check endTime!
     struct Proposal {
         string ipfsHash;
         string title;
         uint256 votedYes;
         uint256 votedNo;
         uint256 endTime;
-        bool executed; // TODO: might not be needed, we just check endTime instead
         string domain;
+        bool restrictToDomain; // if true, only voters from the same domain can access it
     }
 
     struct Voter {
@@ -41,6 +43,8 @@ contract VotingPlatform is JWTValidator {
     string[] proposalHashes;
 
     uint256 public votingPeriod;
+
+
 
     constructor(uint256 _votingPeriod, address _admin) JWTValidator(_admin) {
         votingPeriod = _votingPeriod;
@@ -80,23 +84,23 @@ contract VotingPlatform is JWTValidator {
     }
 
     modifier canVote(string memory _ipfsHash) {
-        console.log("Checking if can vote");
-        console.log("Checking if block.timestamp >= proposals[_ipfsHash].endTime - votingPeriod");
         require(
             
             block.timestamp >= proposals[_ipfsHash].endTime - votingPeriod,
             "Voting not started yet"
         );
 
-        console.log("Checking if block.timestamp < proposals[_ipfsHash].endTime");
+        
         require(
             block.timestamp < proposals[_ipfsHash].endTime,
             "Voting ended"
         );
 
         require(
-            keccak256(bytes(proposals[_ipfsHash].domain)) ==
-                keccak256(bytes(voters[msg.sender].emailDomain)),
+            canAccessDomain(
+                voters[msg.sender].emailDomain,
+                proposals[_ipfsHash].domain
+            ),
             "Voter domain not allowed for this proposal"
         );
 
@@ -114,19 +118,38 @@ contract VotingPlatform is JWTValidator {
         string memory _payload,
         bytes memory _signature
     ) public {
-        // If the voter has not been registered yet, add them to the list addressToEmail
+        // Parse JWT and get email
         string memory parsedEmail = parseJWT(
             _headerJson,
             _payload,
             _signature
         );
-        console.log("Parsed email: %s", parsedEmail);
+        
         bytes32 encodedMail = keccak256(abi.encodePacked(parsedEmail));
-        //console.log("Encoded email: %s", encodedMail);
+
         if (addressToEmail[msg.sender] != encodedMail) {
+            // Extract domain using StringUtils
+            StringUtils.slice memory emailSlice = parsedEmail.toSlice();
+            StringUtils.slice memory atSign = "@".toSlice();
+            StringUtils.slice memory username;
+            StringUtils.slice memory domain;
+            emailSlice.split(atSign, username);
+
+            domain = emailSlice; // After split, emailSlice contains everything after @
+            
+
+            // Get domain as string
+            string memory domainStr = domain.toString();
+            
+            // Verify domain is registered
+            require(isDomainRegistered(domainStr), "Domain not registered");
+            
+            // Store voter info
             addressToEmail[msg.sender] = encodedMail;
-            voters[msg.sender].votingPower = 1;
-            console.log("Voter registered: %s", msg.sender);
+            voters[msg.sender].emailDomain = domainStr;
+            voters[msg.sender].votingPower = domainConfigs[domainStr].powerLevel;
+            
+            
             emit VoterRegistered(msg.sender);
         } else {
             revert("User already registered");
@@ -144,7 +167,7 @@ contract VotingPlatform is JWTValidator {
     function createProposal(
         string memory _ipfsHash,
         string memory _title,
-        uint256 _startTime
+        bool _restrictToDomain
     ) public returns (string memory) { // only domain representant
 
         // Check if domain is approved
@@ -158,11 +181,9 @@ contract VotingPlatform is JWTValidator {
             0,
             0,
             block.timestamp + votingPeriod,
-            false,
-            voter.emailDomain
+            voter.emailDomain,
+            _restrictToDomain
         );
-        console.log("Proposal created : %s",
-         proposals[_ipfsHash].ipfsHash);
         proposalHashes.push(_ipfsHash);
 
         emit ProposalCreated(_ipfsHash, _title, msg.sender);
@@ -170,41 +191,44 @@ contract VotingPlatform is JWTValidator {
         return _ipfsHash;
     }
 
-    function getAllProposals() public view returns (Proposal[] memory) {               
-        string memory voterDomain = voters[msg.sender].emailDomain;
-        Proposal[] memory filteredProposals = new Proposal[](
-            proposalHashes.length
-        );
-        uint currentIndex = 0;
-        // Fill array with matching proposals
-        for (uint i = 0; i < proposalHashes.length; i++) {
-            string memory hash = proposalHashes[i];
-            Proposal memory proposal = proposals[hash];
+    function getAllProposals() public view returns (Proposal[] memory) {
+        Proposal[] memory allProposals = new Proposal[](proposalHashes.length);
+        uint256 validProposalCount = 0;
 
-            // Check if any voter domain matches proposal domains
-            if (
-                keccak256(bytes(voterDomain)) ==
-                keccak256(bytes(proposal.domain))
-            ) {
-                filteredProposals[currentIndex] = proposal;
-                currentIndex++;
+        for (uint256 i = 0; i < proposalHashes.length; i++) {
+            string memory ipfsHash = proposalHashes[i];
+            Proposal memory proposal = proposals[ipfsHash];
+            // if proposal is restricted to domain, only voters from the same domain can access it
+            if (proposal.restrictToDomain && keccak256(abi.encodePacked(proposal.domain)) == keccak256(abi.encodePacked(voters[msg.sender].emailDomain))) {
+                allProposals[validProposalCount] = proposals[ipfsHash];
+                validProposalCount++;
+            }
+            // otherwise, check sub-parent domain relationship
+            else if (canAccessDomain(
+                voters[msg.sender].emailDomain,
+                proposals[ipfsHash].domain
+            )) {
+                allProposals[validProposalCount] = proposals[ipfsHash];
+                validProposalCount++;
             }
         }
-        return filteredProposals;
+        // Create correctly sized array
+        Proposal[] memory result = new Proposal[](validProposalCount);
+        for (uint256 i = 0; i < validProposalCount; i++) {
+            result[i] = allProposals[i];
+        }
+        return result;
     }
 
     function castVote(
         string memory _ipfsHash,
         bool _support
     ) public canVote(_ipfsHash) {
-        console.log("Voting for proposal: %s", _ipfsHash);
         Proposal storage proposal = proposals[_ipfsHash];
         
         if (_support) {
-            console.log("Voted yes");
             proposal.votedYes += voters[msg.sender].votingPower;
         } else {
-            console.log("Voted no");
             proposal.votedNo += voters[msg.sender].votingPower;
         }
 
@@ -215,28 +239,7 @@ contract VotingPlatform is JWTValidator {
         emit VoteCast(_ipfsHash, msg.sender, _support);
     }
 
-    function parseJWT(
-        string memory _headerJson,
-        string memory _payloadJson,
-        bytes memory _signature
-    ) private view returns (string memory) {
-        string memory email = validateJwt(
-            _headerJson,
-            _payloadJson,
-            _signature,
-            msg.sender
-        );
 
-        string memory emailDomain = email
-            .toSlice()
-            .split("@".toSlice())
-            .toString();
-
-        if (!isDomainRegistered(emailDomain)) {
-            revert("Domain not registered by the admin");
-        }
-        return email;
-    }
 
     function login(
         string memory _headerJson,
@@ -255,7 +258,6 @@ contract VotingPlatform is JWTValidator {
             senderEmail == keccak256(abi.encodePacked(parsedEmail)),
             "Registered email does not match login one"
         );
-
         return true;
     }
 }

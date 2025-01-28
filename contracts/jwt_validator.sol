@@ -7,8 +7,6 @@ import {StringUtils} from "../libs/Strings.sol";
 
 import "./platform_admin.sol";
 
-import "hardhat/console.sol";
-
 contract JWTValidator is PlatformAdmin {
  
     uint256 internal _tokenIdCounter;
@@ -44,9 +42,9 @@ contract JWTValidator is PlatformAdmin {
     
 
     function addModulus(string memory kid, bytes memory modulus) external onlyAdmin{
-        console.log("Adding modulus for kid: %s", kid);
+        
         modulo[kid] = modulus;
-        console.log("Modulus added for kid: %s", kid);
+        
         keyIds.push(kid);
     }
 
@@ -62,13 +60,37 @@ contract JWTValidator is PlatformAdmin {
         return modulo[kid];
     }
 
+   function parseJWT(
+        string memory _headerJson,
+        string memory _payloadJson,
+        bytes memory _signature
+    ) internal view returns (string memory) {
+        string memory email = validateJwt(
+            _headerJson,
+            _payloadJson,
+            _signature,
+            msg.sender
+        );
+        console.log("Email: %s", email);
+        string memory emailDomain = email
+            .toSlice()
+            .split("@".toSlice())
+            .toString();
+
+        console.log("Email domain: %s", emailDomain);
+        if (!isDomainRegistered(emailDomain)) {
+            revert("Domain not registered by the admin");
+        }
+        return email;
+    }
+
+
     function validateJwt(
         string memory _headerJson,
         string memory _payloadJson,
         bytes memory _signature,
         address _receiver
     ) internal view returns (string memory) {
-        console.log("Validating JWT");
 
         string memory headerBase64 = _headerJson.encode();
         string memory payloadBase64 = _payloadJson.encode();
@@ -85,7 +107,6 @@ contract JWTValidator is PlatformAdmin {
         bytes memory modulus = getRsaModulus(kid);
 
         if (message.pkcs1Sha256VerifyStr(_signature, exponent, modulus) != 0) {
-            console.log("Invalid signature");
             revert InvalidSignature(message, _signature, exponent, modulus);
         }
 
@@ -98,38 +119,33 @@ contract JWTValidator is PlatformAdmin {
         // JWT nonce should be receiver to prevent frontrunning
         string memory senderBase64 = string(abi.encodePacked(_receiver)).encode();
 
-        console.log("address: %s", _receiver);
-        console.log("Sender: %s", senderBase64);
-        console.log("Nonce: %s", nonce);
         if (senderBase64.strCompare(nonce) != 0) {
-            console.log("Invalid nonce");
             revert InvalidNonce(nonce, _receiver);
         }
-        console.log("Email: %s", email);
         return email;
     }
 
     function parseHeader(string memory json) internal pure returns (string memory kid) {
         (uint256 exitCode, JsmnSolLib.Token[] memory tokens, uint256 ntokens) = json.parse(20);
         if (exitCode != 0) {
-            console.log("JSONParseFailed");
+   
             revert JSONParseFailed();
         }
 
         if (tokens[0].jsmnType != JsmnSolLib.JsmnType.OBJECT) {
-            console.log("ExpectedJWTToBeAnObject");
+         
             revert ExpectedJWTToBeAnObject();
         }
         uint256 i = 1;
         while (i < ntokens) {
             if (tokens[i].jsmnType != JsmnSolLib.JsmnType.STRING) {
-                console.log("ExpectedJWTToContainOnlyStringKeys");
+         
                 revert ExpectedJWTToContainOnlyStringKeys();
             }
             string memory key = json.getBytes(tokens[i].start, tokens[i].end);
             if (key.strCompare("kid") == 0) {
                 if (tokens[i + 1].jsmnType != JsmnSolLib.JsmnType.STRING) {
-                    console.log("ExpectedKidToBeAString");
+            
                     revert ExpectedKidToBeAString();
                 }
                 return json.getBytes(tokens[i + 1].start, tokens[i + 1].end);
@@ -145,36 +161,36 @@ contract JWTValidator is PlatformAdmin {
     {
         (uint256 exitCode, JsmnSolLib.Token[] memory tokens, uint256 ntokens) = json.parse(40);
         if (exitCode != 0) {
-            console.log("JSONParseFailed");
+      
             revert JSONParseFailed();
         }
 
         if (tokens[0].jsmnType != JsmnSolLib.JsmnType.OBJECT) {
-            console.log("ExpectedJWTToBeAnObject");
+    
             revert ExpectedJWTToBeAnObject();
         }
         uint256 i = 1;
         while (i < ntokens) {
             if (tokens[i].jsmnType != JsmnSolLib.JsmnType.STRING) {
-                console.log("ExpectedJWTToContainOnlyStringKeys");
+   
                 revert ExpectedJWTToContainOnlyStringKeys();
             }
             string memory key = json.getBytes(tokens[i].start, tokens[i].end);
             if (key.strCompare("aud") == 0) {
                 if (tokens[i + 1].jsmnType != JsmnSolLib.JsmnType.STRING) {
-                    console.log("ExpectedAudToBeAString");
+ 
                     revert ExpectedAudToBeAString();
                 }
                 aud = json.getBytes(tokens[i + 1].start, tokens[i + 1].end);
             } else if (key.strCompare("nonce") == 0) {
                 if (tokens[i + 1].jsmnType != JsmnSolLib.JsmnType.STRING) {
-                    console.log("ExpectedNonceToBeAString");
+      
                     revert ExpectedNonceToBeAString();
                 }
                 nonce = json.getBytes(tokens[i + 1].start, tokens[i + 1].end);
             } else if (key.strCompare("email") == 0) {
                 if (tokens[i + 1].jsmnType != JsmnSolLib.JsmnType.STRING) {
-                    console.log("ExpectedEmailToBeAString");
+               
                     revert ExpectedEmailToBeAString();
                 }
                 email = json.getBytes(tokens[i + 1].start, tokens[i + 1].end);
@@ -188,7 +204,6 @@ contract JWTValidator is PlatformAdmin {
     function getRsaModulus(string memory kid) internal view returns (bytes memory modulus) {
         modulus = getModulus(kid);
         if (modulus.length == 0) {
-            console.log("UnknownKid");
             revert UnknownKid(kid);
         }
     }

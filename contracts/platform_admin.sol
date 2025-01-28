@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import "hardhat/console.sol";
+
 contract PlatformAdmin {
     mapping(address => bool) public admins;
     mapping(address => mapping(address => bool)) public adminApprovals;
     mapping(address => uint256) public pendingAdminApprovalCount;
     mapping(address => uint256) public adminProposalTime;
+    
+      // strong (domain) => parent domain
+    mapping(string => string) public parentDomains;
+    // domain => DomainConfig (info about domain)
+    mapping(string => DomainConfig) public domainConfigs;
+    // all domains
     string[] public domainList;
 
     address public admin;
@@ -16,7 +24,7 @@ contract PlatformAdmin {
     event AdminProposed(address indexed proposer, address indexed newAdmin);
     event AdminApproved(address indexed approver, address indexed newAdmin);
     event AdminRemoved(address indexed admin);
-    event DomainAdded(string domain);
+    event DomainAdded(string domain, uint256 powerLevel);
 
     constructor(address _admin) {
         admins[_admin] = true;
@@ -83,7 +91,12 @@ contract PlatformAdmin {
         emit AdminRemoved(_admin);
     }
 
-    
+  
+    struct DomainConfig {
+        string domain;
+        uint256 powerLevel;
+        bool isActive;
+    }
 
     function getDomains() external view returns (string[] memory) {
         return domainList;
@@ -91,18 +104,56 @@ contract PlatformAdmin {
 
     function isDomainRegistered(string memory _domain) internal view returns (bool) {
         for (uint i = 0; i < domainList.length; i++) {
-            if(keccak256(bytes(domainList[i])) != keccak256(bytes(_domain))) {
+            if(keccak256(bytes(domainList[i])) == keccak256(bytes(_domain))) {
                return true;
             }
         }    
         return false;
     }
   
-    function addDomain(string memory _domain) public onlyAdmin {
-        bool isRegistered = isDomainRegistered(_domain);
-        require(!isRegistered, "Domain already registered");
-
+    // usage example:
+    //addDomain("unitn.it", 2, "");  // Parent domain
+    //addDomain("studenti.unitn.it", 1, "unitn.it");  // Subdomain
+    function addDomain(string memory _domain, uint256 _powerLevel, string memory _parentDomain) public onlyAdmin {
+        require(_powerLevel > 0, "Power level must be positive");
+        
+        require(!isDomainRegistered(_domain), "Domain already registered");
+        
+        domainConfigs[_domain] = DomainConfig({
+            domain: _domain,
+            powerLevel: _powerLevel,
+            isActive: true
+        });
+        
+        if(bytes(_parentDomain).length > 0) {
+            console.log("parent domain:", _parentDomain);
+            require(domainConfigs[_parentDomain].isActive, "Parent domain not registered");
+            parentDomains[_domain] = _parentDomain;
+        }
         domainList.push(_domain);
-        emit DomainAdded(_domain);
+        emit DomainAdded(_domain, _powerLevel);
+    }
+    
+    function canAccessDomain(string memory _userDomain, string memory _targetDomain) public view returns (bool) {
+        // check trivial case first
+        if (keccak256(bytes(_userDomain)) == keccak256(bytes(_targetDomain))) return true;
+        // check if user domain is a subdomain of target domain
+        string memory current = _userDomain;
+        while(bytes(parentDomains[current]).length > 0) {
+            if (keccak256(bytes(parentDomains[current])) == keccak256(bytes(_targetDomain))) {
+                return true;
+            }
+            current = parentDomains[current];
+        }
+        // check the opposite case, domain is a parent domain of target domain
+        current = _targetDomain;
+        while(bytes(parentDomains[current]).length > 0) {
+            if (keccak256(bytes(parentDomains[current])) == keccak256(bytes(_userDomain))) {
+            return true;
+            }
+            current = parentDomains[current];
+        }
+
+        return false;
     }
 }
