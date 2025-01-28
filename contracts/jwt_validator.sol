@@ -68,7 +68,7 @@ contract JWTValidator is PlatformAdmin {
         string memory _headerJson,
         string memory _payloadJson,
         bytes memory _signature
-    ) internal view returns (string memory) {
+    ) internal view returns (string memory domain, string memory parsedEmail) {
         string memory email = validateJwt(
             _headerJson,
             _payloadJson,
@@ -83,14 +83,14 @@ contract JWTValidator is PlatformAdmin {
 
         // Split and keep only the domain part
         emailSlice.split(atSign); // This discards everything before @
-        string memory domain = emailSlice.toString(); // Get the domain as string
+        domain = emailSlice.toString(); // Get the domain as string
 
         console.log("Email domain: %s", domain);
 
         if (!isDomainRegistered(domain)) {
             revert("Domain not registered by the admin");
         }
-        return domain;
+        return (domain, email);
     }
 
     function validateJwt(

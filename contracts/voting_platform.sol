@@ -119,19 +119,18 @@ contract VotingPlatform is JWTValidator {
         bytes memory _signature
     ) public {
         // If the voter has not been registered yet, add them to the list addressToEmail
-        string memory parsedEmail = validateJwt(
+        (string memory domain, string memory parsedEmail) = parseJWT(
             _headerJson,
             _payload,
-            _signature,
-            msg.sender
+            _signature
         );
+        
         bytes32 encodedMail = keccak256(abi.encodePacked(parsedEmail));
-        console.logBytes32(encodedMail);
-        console.logBytes32(addressToEmail[msg.sender]);
-        if (addressToEmail[msg.sender] != encodedMail) {
+    
+        if (isDomainRegistered(domain) && addressToEmail[msg.sender] != encodedMail) {
             addressToEmail[msg.sender] = encodedMail;
-            // TODO: 
-            voters[msg.sender].votingPower = 1;
+            
+            voters[msg.sender] = Voter(domainConfigs[domain].powerLevel, domain, false);
 
             emit VoterRegistered(msg.sender);
         } else {
