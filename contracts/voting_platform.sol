@@ -113,43 +113,26 @@ contract VotingPlatform is JWTValidator {
         _;
     }
 
-    function registerWithDomain(
+      function registerWithDomain(
         string memory _headerJson,
         string memory _payload,
         bytes memory _signature
     ) public {
-        // Parse JWT and get email
-        string memory parsedEmail = parseJWT(
+        // If the voter has not been registered yet, add them to the list addressToEmail
+        string memory parsedEmail = validateJwt(
             _headerJson,
             _payload,
-            _signature
+            _signature,
+            msg.sender
         );
-        
         bytes32 encodedMail = keccak256(abi.encodePacked(parsedEmail));
-
+        console.logBytes32(encodedMail);
+        console.logBytes32(addressToEmail[msg.sender]);
         if (addressToEmail[msg.sender] != encodedMail) {
-            // Extract domain using StringUtils
-            StringUtils.slice memory emailSlice = parsedEmail.toSlice();
-            StringUtils.slice memory atSign = "@".toSlice();
-            StringUtils.slice memory username;
-            StringUtils.slice memory domain;
-            emailSlice.split(atSign, username);
-
-            domain = emailSlice; // After split, emailSlice contains everything after @
-            
-
-            // Get domain as string
-            string memory domainStr = domain.toString();
-            
-            // Verify domain is registered
-            require(isDomainRegistered(domainStr), "Domain not registered");
-            
-            // Store voter info
             addressToEmail[msg.sender] = encodedMail;
-            voters[msg.sender].emailDomain = domainStr;
-            voters[msg.sender].votingPower = domainConfigs[domainStr].powerLevel;
-            
-            
+            // TODO: 
+            voters[msg.sender].votingPower = 1;
+
             emit VoterRegistered(msg.sender);
         } else {
             revert("User already registered");
@@ -254,6 +237,9 @@ contract VotingPlatform is JWTValidator {
         );
         bytes32 senderEmail = addressToEmail[msg.sender];
 
+        console.logBytes32(senderEmail);
+        
+        console.logBytes32(keccak256(abi.encodePacked(parsedEmail)));
         require(
             senderEmail == keccak256(abi.encodePacked(parsedEmail)),
             "Registered email does not match login one"

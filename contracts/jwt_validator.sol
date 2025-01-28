@@ -122,7 +122,7 @@ contract JWTValidator is PlatformAdmin {
             string memory nonce,
             string memory email
         ) = parseToken(_payloadJson);
-
+        console.log("email: %s", email);
         // if (aud.strCompare(audience) != 0) {
         //     revert;
         // }
