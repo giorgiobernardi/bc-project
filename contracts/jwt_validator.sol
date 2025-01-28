@@ -8,15 +8,19 @@ import {StringUtils} from "../libs/Strings.sol";
 import "./platform_admin.sol";
 
 contract JWTValidator is PlatformAdmin {
- 
     uint256 internal _tokenIdCounter;
-    
+
     using Base64 for string;
     using JsmnSolLib for string;
     using StringUtils for *;
     using SolRsaVerify for *;
 
-   error InvalidSignature(string message, bytes signature, bytes exponent, bytes modulus);
+    error InvalidSignature(
+        string message,
+        bytes signature,
+        bytes exponent,
+        bytes modulus
+    );
     error InvalidAudience(string aud, string expectedAudience);
     error InvalidNonce(string nonce, address receiver);
     error InvalidDomain(string email, string domain);
@@ -31,20 +35,20 @@ contract JWTValidator is PlatformAdmin {
     error ExpectedEmailToBeAString();
     error UnknownKid(string kid);
 
-    constructor(address _admin) PlatformAdmin(_admin){}
+    constructor(address _admin) PlatformAdmin(_admin) {}
 
     // TODO: refactor addModulus so that onlyAdmin can call them, to do so,
     // make them internal and call them from the VotingPlatform contract! NOT SURE IF THAT'S HOW IT WORKS :))
     // @Ulises to @Giorgio: It should suffice to use the onlyAdmin modifier in the method signature
     mapping(string kid => bytes) private modulo;
-    string[] private keyIds;  // Track all key IDs
-    
-    
+    string[] private keyIds; // Track all key IDs
 
-    function addModulus(string memory kid, bytes memory modulus) external onlyAdmin{
-        
+    function addModulus(
+        string memory kid,
+        bytes memory modulus
+    ) external onlyAdmin {
         modulo[kid] = modulus;
-        
+
         keyIds.push(kid);
     }
 
@@ -55,12 +59,12 @@ contract JWTValidator is PlatformAdmin {
         }
         return moduli;
     }
-    
+
     function getModulus(string memory kid) public view returns (bytes memory) {
         return modulo[kid];
     }
 
-   function parseJWT(
+    function parseJWT(
         string memory _headerJson,
         string memory _payloadJson,
         bytes memory _signature
@@ -72,18 +76,15 @@ contract JWTValidator is PlatformAdmin {
             msg.sender
         );
         console.log("Email: %s", email);
-        string memory emailDomain = email
-            .toSlice()
-            .split("@".toSlice())
-            .toString();
 
-        console.log("Email domain: %s", emailDomain);
-        if (!isDomainRegistered(emailDomain)) {
+        email.toSlice().split("@".toSlice()).toString();
+        console.log("Email domain: %s", email);
+        // email is now set to its domain
+        if (!isDomainRegistered(email)) {
             revert("Domain not registered by the admin");
         }
         return email;
     }
-
 
     function validateJwt(
         string memory _headerJson,
@@ -91,7 +92,6 @@ contract JWTValidator is PlatformAdmin {
         bytes memory _signature,
         address _receiver
     ) internal view returns (string memory) {
-
         string memory headerBase64 = _headerJson.encode();
         string memory payloadBase64 = _payloadJson.encode();
         //console.log("HeaderJson: %s", _headerJson);
@@ -110,14 +110,19 @@ contract JWTValidator is PlatformAdmin {
             revert InvalidSignature(message, _signature, exponent, modulus);
         }
 
-        (string memory aud, string memory nonce, string memory email) = parseToken(_payloadJson);
-        
+        (
+            string memory aud,
+            string memory nonce,
+            string memory email
+        ) = parseToken(_payloadJson);
+
         // if (aud.strCompare(audience) != 0) {
         //     revert;
         // }
 
         // JWT nonce should be receiver to prevent frontrunning
-        string memory senderBase64 = string(abi.encodePacked(_receiver)).encode();
+        string memory senderBase64 = string(abi.encodePacked(_receiver))
+            .encode();
 
         if (senderBase64.strCompare(nonce) != 0) {
             revert InvalidNonce(nonce, _receiver);
@@ -125,27 +130,29 @@ contract JWTValidator is PlatformAdmin {
         return email;
     }
 
-    function parseHeader(string memory json) internal pure returns (string memory kid) {
-        (uint256 exitCode, JsmnSolLib.Token[] memory tokens, uint256 ntokens) = json.parse(20);
+    function parseHeader(
+        string memory json
+    ) internal pure returns (string memory kid) {
+        (
+            uint256 exitCode,
+            JsmnSolLib.Token[] memory tokens,
+            uint256 ntokens
+        ) = json.parse(20);
         if (exitCode != 0) {
-   
             revert JSONParseFailed();
         }
 
         if (tokens[0].jsmnType != JsmnSolLib.JsmnType.OBJECT) {
-         
             revert ExpectedJWTToBeAnObject();
         }
         uint256 i = 1;
         while (i < ntokens) {
             if (tokens[i].jsmnType != JsmnSolLib.JsmnType.STRING) {
-         
                 revert ExpectedJWTToContainOnlyStringKeys();
             }
             string memory key = json.getBytes(tokens[i].start, tokens[i].end);
             if (key.strCompare("kid") == 0) {
                 if (tokens[i + 1].jsmnType != JsmnSolLib.JsmnType.STRING) {
-            
                     revert ExpectedKidToBeAString();
                 }
                 return json.getBytes(tokens[i + 1].start, tokens[i + 1].end);
@@ -154,43 +161,43 @@ contract JWTValidator is PlatformAdmin {
         }
     }
 
-    function parseToken(string memory json)
+    function parseToken(
+        string memory json
+    )
         internal
         pure
         returns (string memory aud, string memory nonce, string memory email)
     {
-        (uint256 exitCode, JsmnSolLib.Token[] memory tokens, uint256 ntokens) = json.parse(40);
+        (
+            uint256 exitCode,
+            JsmnSolLib.Token[] memory tokens,
+            uint256 ntokens
+        ) = json.parse(40);
         if (exitCode != 0) {
-      
             revert JSONParseFailed();
         }
 
         if (tokens[0].jsmnType != JsmnSolLib.JsmnType.OBJECT) {
-    
             revert ExpectedJWTToBeAnObject();
         }
         uint256 i = 1;
         while (i < ntokens) {
             if (tokens[i].jsmnType != JsmnSolLib.JsmnType.STRING) {
-   
                 revert ExpectedJWTToContainOnlyStringKeys();
             }
             string memory key = json.getBytes(tokens[i].start, tokens[i].end);
             if (key.strCompare("aud") == 0) {
                 if (tokens[i + 1].jsmnType != JsmnSolLib.JsmnType.STRING) {
- 
                     revert ExpectedAudToBeAString();
                 }
                 aud = json.getBytes(tokens[i + 1].start, tokens[i + 1].end);
             } else if (key.strCompare("nonce") == 0) {
                 if (tokens[i + 1].jsmnType != JsmnSolLib.JsmnType.STRING) {
-      
                     revert ExpectedNonceToBeAString();
                 }
                 nonce = json.getBytes(tokens[i + 1].start, tokens[i + 1].end);
             } else if (key.strCompare("email") == 0) {
                 if (tokens[i + 1].jsmnType != JsmnSolLib.JsmnType.STRING) {
-               
                     revert ExpectedEmailToBeAString();
                 }
                 email = json.getBytes(tokens[i + 1].start, tokens[i + 1].end);
@@ -199,18 +206,19 @@ contract JWTValidator is PlatformAdmin {
         }
     }
 
-    
-
-    function getRsaModulus(string memory kid) internal view returns (bytes memory modulus) {
+    function getRsaModulus(
+        string memory kid
+    ) internal view returns (bytes memory modulus) {
         modulus = getModulus(kid);
         if (modulus.length == 0) {
             revert UnknownKid(kid);
         }
     }
 
-    function getRsaExponent(string memory) internal pure returns (bytes memory) {
+    function getRsaExponent(
+        string memory
+    ) internal pure returns (bytes memory) {
         return
-        hex"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010001";
+            hex"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010001";
     }
-
 }
