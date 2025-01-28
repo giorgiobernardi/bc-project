@@ -77,13 +77,20 @@ contract JWTValidator is PlatformAdmin {
         );
         console.log("Email: %s", email);
 
-        email.toSlice().split("@".toSlice()).toString();
-        console.log("Email domain: %s", email);
-        // email is now set to its domain
-        if (!isDomainRegistered(email)) {
+        // Create a slice from email
+        StringUtils.slice memory emailSlice = email.toSlice();
+        StringUtils.slice memory atSign = "@".toSlice();
+
+        // Split and keep only the domain part
+        emailSlice.split(atSign); // This discards everything before @
+        string memory domain = emailSlice.toString(); // Get the domain as string
+
+        console.log("Email domain: %s", domain);
+
+        if (!isDomainRegistered(domain)) {
             revert("Domain not registered by the admin");
         }
-        return email;
+        return domain;
     }
 
     function validateJwt(
