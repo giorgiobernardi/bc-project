@@ -37,9 +37,6 @@ contract JWTValidator is PlatformAdmin {
 
     constructor(address _admin) PlatformAdmin(_admin) {}
 
-    // TODO: refactor addModulus so that onlyAdmin can call them, to do so,
-    // make them internal and call them from the VotingPlatform contract! NOT SURE IF THAT'S HOW IT WORKS :))
-    // @Ulises to @Giorgio: It should suffice to use the onlyAdmin modifier in the method signature
     mapping(string kid => bytes) private modulo;
     string[] private keyIds; // Track all key IDs
 
@@ -88,7 +85,7 @@ contract JWTValidator is PlatformAdmin {
         console.log("Email domain: %s", domain);
 
         if (!isDomainRegistered(domain)) {
-            revert("Domain not registered by the admin");
+            revert("Domain not registered by the admin OR domain expired");
         }
         return (domain, email);
     }
