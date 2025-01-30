@@ -1,30 +1,38 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "hardhat/console.sol";
-import "./base/BaseAdmin.sol";
-import "./libraries/DomainLib.sol";
 
-contract PlatformAdmin is BaseAdmin {
+import "./libraries/DomainLib.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+import "hardhat/console.sol";
+
+contract PlatformAdmin is Ownable {
     using DomainLib for DomainLib.DomainConfig;
 
-    mapping(string => string) public parentDomains;
-    mapping(string => DomainLib.DomainConfig) public domainConfigs;
     string[] public domainList;
-
-    uint256 public constant ADMIN_PROPOSAL_COOLDOWN = 1 days;
-    mapping(address => mapping(address => bool)) public adminApprovals;
-    mapping(address => uint256) public pendingAdminApprovalCount;
-    mapping(address => uint256) public adminProposalTime;
-
     address public admin;
-
     uint256 public constant DOMAIN_REGISTRATION_FEE = 1 ether;
     uint256 public constant DOMAIN_RENEWAL_FEE = 0.5 ether;
     uint256 public constant REGISTRATION_DURATION = 10 days;
 
+    mapping(string => string) public parentDomains;
+    mapping(string => DomainLib.DomainConfig) public domainConfigs;
+
+
     event DomainExpired(string domain, uint256 expiryDate);
     event DomainRenewed(string domain, uint256 newExpirationDate);
+
+
+    constructor(address _admin, address _owner) Ownable(_owner) {
+        admin = _admin;
+    }
+
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin can perform this operation");
+        _;
+    }
 
     modifier domainNotExpired(string memory _domain) {
         require(
@@ -34,15 +42,22 @@ contract PlatformAdmin is BaseAdmin {
         _;
     } 
 
+    function isOwner() public view returns (bool) {
+        return msg.sender == owner();
+    }
+
+    function getContractBalance() public view returns (uint) {
+        return address(this).balance;
+    }
+
     modifier hasPaid(){
         require(msg.value >= DOMAIN_REGISTRATION_FEE, "Insufficient payment");
         require(msg.sender.balance >= msg.value, "insufficient balance");
         _;
     }
 
-    constructor(address _admin) {
-        admins[_admin] = true;
-        adminCount = 1;
+    function setAdmin(address _admin) public onlyOwner {
+        admin = _admin;
     }
 
     function renewDomain(string memory _domain) public payable hasPaid {
@@ -52,47 +67,9 @@ contract PlatformAdmin is BaseAdmin {
         config.expiryDate = block.timestamp + REGISTRATION_DURATION;
     }
 
-    function withdrawFees() public onlyAdmin {
+    function withdrawFees() public onlyOwner {
         payable(msg.sender).transfer(address(this).balance);
     }
-
-    function proposeNewAdmin(address _newAdmin) external onlyAdmin {
-        require(_newAdmin != address(0), "Invalid address");
-        require(!admins[_newAdmin], "Already an admin");
-        require(
-            block.timestamp >=
-                adminProposalTime[_newAdmin] + ADMIN_PROPOSAL_COOLDOWN,
-            "Cooldown period"
-        );
-
-        adminProposalTime[_newAdmin] = block.timestamp;
-        pendingAdminApprovalCount[_newAdmin] = 0;
-
-        // Reset previous approvals
-        for (uint i = 0; i < adminCount; i++) {
-            adminApprovals[msg.sender][_newAdmin] = false;
-        }
-        emit AdminProposed(msg.sender, _newAdmin);
-    }
-
-    function approveNewAdmin(address _proposedAdmin) external onlyAdmin {
-        require(
-            !adminApprovals[msg.sender][_proposedAdmin],
-            "Already approved"
-        );
-        require(adminProposalTime[_proposedAdmin] > 0, "Not proposed");
-
-        adminApprovals[msg.sender][_proposedAdmin] = true;
-        pendingAdminApprovalCount[_proposedAdmin]++;
-
-        // If majority achieved, add new admin
-        if (pendingAdminApprovalCount[_proposedAdmin] > adminCount / 2) {
-            admins[_proposedAdmin] = true;
-            adminCount++;
-            delete pendingAdminApprovalCount[_proposedAdmin];
-        }
-    }
-
 
     function getDomains() external view returns (string[] memory) {
         return domainList;
@@ -103,7 +80,9 @@ contract PlatformAdmin is BaseAdmin {
     ) internal view returns (bool) {
         for (uint i = 0; i < domainList.length; i++) {
             if (keccak256(bytes(domainList[i])) == keccak256(bytes(_domain))) {
-                return domainConfigs[_domain].expiryDate >= block.timestamp;
+                console.log("Domain expiry: ", domainConfigs[_domain].expiryDate);
+                console.log("Domain: ", _domain);   
+                return domainConfigs[_domain].expiryDate > block.timestamp;
             }
         }
         return false;
@@ -133,10 +112,13 @@ contract PlatformAdmin is BaseAdmin {
             powerLevel: _powerLevel,
             expiryDate: block.timestamp + REGISTRATION_DURATION
         });
-
+        console.log("Domain expiry: ", domainConfigs[_domain].expiryDate);
+        console.log("Domain added: ", _domain);
+        
         if (bytes(_parentDomain).length > 0) {
             parentDomains[_domain] = _parentDomain;
         }
+        
         domainList.push(_domain);
     }
 

@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 
 import "../libraries/VoterLib.sol";
 
+
 abstract contract BaseVoting {
     using VoterLib for VoterLib.Voter;
     
@@ -16,7 +17,7 @@ abstract contract BaseVoting {
         voters[_voter] = VoterLib.Voter({
             votingPower: _power,
             emailDomain: _domain,
-            canPropose: false
+            canPropose: true
         });
         emit VoterRegistered(_voter);
     }

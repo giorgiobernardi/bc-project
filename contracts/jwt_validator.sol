@@ -35,7 +35,7 @@ contract JWTValidator is PlatformAdmin {
     error ExpectedEmailToBeAString();
     error UnknownKid(string kid);
 
-    constructor(address _admin) PlatformAdmin(_admin) {}
+    constructor(address _admin, address _owner) PlatformAdmin(_admin, _owner) {}
 
     mapping(string kid => bytes) private modulo;
     string[] private keyIds; // Track all key IDs
@@ -43,7 +43,7 @@ contract JWTValidator is PlatformAdmin {
     function addModulus(
         string memory kid,
         bytes memory modulus
-    ) external onlyAdmin {
+    ) external onlyOwner {
         modulo[kid] = modulus;
 
         keyIds.push(kid);
@@ -72,7 +72,7 @@ contract JWTValidator is PlatformAdmin {
             _signature,
             msg.sender
         );
-        console.log("Email: %s", email);
+      
 
         // Create a slice from email
         StringUtils.slice memory emailSlice = email.toSlice();
@@ -81,8 +81,6 @@ contract JWTValidator is PlatformAdmin {
         // Split and keep only the domain part
         emailSlice.split(atSign); // This discards everything before @
         domain = emailSlice.toString(); // Get the domain as string
-
-        console.log("Email domain: %s", domain);
 
         if (!isDomainRegistered(domain)) {
             revert("Domain not registered by the admin OR domain expired");
@@ -98,15 +96,14 @@ contract JWTValidator is PlatformAdmin {
     ) internal view returns (string memory) {
         string memory headerBase64 = _headerJson.encode();
         string memory payloadBase64 = _payloadJson.encode();
-        //console.log("HeaderJson: %s", _headerJson);
-        //console.log("PayloadJson: %s", _payloadJson);
+   
         StringUtils.slice[] memory slices = new StringUtils.slice[](2);
         slices[0] = headerBase64.toSlice();
         slices[1] = payloadBase64.toSlice();
         string memory message = ".".toSlice().join(slices);
-        //console.log("Message: %s", message);
+        
         string memory kid = parseHeader(_headerJson);
-        //console.log("Kid: %s", kid);
+        
         bytes memory exponent = getRsaExponent(kid);
         bytes memory modulus = getRsaModulus(kid);
 
@@ -119,10 +116,6 @@ contract JWTValidator is PlatformAdmin {
             string memory nonce,
             string memory email
         ) = parseToken(_payloadJson);
-        console.log("email: %s", email);
-        // if (aud.strCompare(audience) != 0) {
-        //     revert;
-        // }
 
         // JWT nonce should be receiver to prevent frontrunning
         string memory senderBase64 = string(abi.encodePacked(_receiver))

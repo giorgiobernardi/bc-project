@@ -2,10 +2,11 @@
 pragma solidity ^0.8.28;
 
 import "./jwt_validator.sol";
-import "hardhat/console.sol";
 import "./libraries/ProposalLib.sol";
 import "./base/BaseVoting.sol";
 
+
+import "hardhat/console.sol";
 
 contract VotingPlatform is JWTValidator, BaseVoting {
     
@@ -28,11 +29,7 @@ contract VotingPlatform is JWTValidator, BaseVoting {
     uint256 public votingPeriod;
 
 
-    constructor(uint256 _votingPeriod, address _admin) JWTValidator(_admin) {
-        votingPeriod = _votingPeriod;
-    }
-
-    function setVotingPeriod(uint256 _votingPeriod) public onlyAdmin {
+    constructor(uint256 _votingPeriod, address _admin, address _owner) JWTValidator(_admin, _owner) {
         votingPeriod = _votingPeriod;
     }
 
@@ -86,34 +83,36 @@ contract VotingPlatform is JWTValidator, BaseVoting {
         _;
     }
 
-    function addProposer(address _voterAddr) public onlyAdmin {
-        voters[_voterAddr].canPropose = true;
-    }
-    function removeProposer(address _voterAddr) public onlyAdmin {
-        voters[_voterAddr].canPropose = false;
-    }
-
+    
+    
     function createProposal(
         string memory _ipfsHash,
-        string memory _title,
+        address _voterAddress,
         bool _restrictToDomain
-    ) public returns (string memory) { // only domain representant
-
-        // Check if domain is approved
+    ) public onlyAdmin returns (string memory) { // only domain representant
         
-        require(voters[msg.sender].canPropose || isAdmin(msg.sender), "Not allowed to propose");
-        VoterLib.Voter storage voter = voters[msg.sender];
-        require(domainConfigs[voter.emailDomain].expiryDate >= block.timestamp+votingPeriod, 
-        "Domain expires before proposal ends");
+        // Check if domain is approved
+        VoterLib.Voter storage voter = voters[_voterAddress];
+        uint256 proposalExpiryDate = block.timestamp+votingPeriod;
+        console.log("email domain: ", voter.emailDomain);
+        console.log("stored domain: ", domainConfigs[voter.emailDomain].domain);  
+        console.log("expiry date: ", domainConfigs[voter.emailDomain].expiryDate);  
+        console.log("proposal expiry date: ", proposalExpiryDate);
+        
+        require(
+            (domainConfigs[voter.emailDomain].expiryDate) >= proposalExpiryDate, 
+            "Domain expires before proposal ends"
+        );
+        
         proposals[_ipfsHash] = ProposalLib.Proposal(
             _ipfsHash,
-            _title,
             0,
             0,
-            block.timestamp + votingPeriod,
+            proposalExpiryDate,
             voter.emailDomain,
             _restrictToDomain
         );
+        
         proposalHashes.push(_ipfsHash);
         return _ipfsHash;
     }
@@ -164,7 +163,8 @@ contract VotingPlatform is JWTValidator, BaseVoting {
         votersList.push(msg.sender);
     }
 
-    
+
+
     function registerWithDomain(
         string memory _headerJson,
         string memory _payload,
@@ -178,8 +178,6 @@ contract VotingPlatform is JWTValidator, BaseVoting {
         );
         
         bytes32 encodedMail = keccak256(abi.encodePacked(parsedEmail));
-        console.logBytes32(addressToEmail[msg.sender]);
-        console.logBytes32(encodedMail);
         if (isDomainRegistered(domain) && addressToEmail[msg.sender] != encodedMail) {
             addressToEmail[msg.sender] = encodedMail;
             _registerVoter(msg.sender, domain, domainConfigs[domain].powerLevel);
@@ -200,9 +198,7 @@ contract VotingPlatform is JWTValidator, BaseVoting {
             _signature
         );
         bytes32 senderEmail = addressToEmail[msg.sender];
-        console.log("parsedEmail: %s", parsedEmail);   
-        console.logBytes32(senderEmail);
-        console.logBytes32(keccak256(abi.encodePacked(parsedEmail)));
+
         // added domain check upon login attempt as domains can now EXPIRE!!!
         require(isDomainRegistered(domain), "domain expired! must renew!");
         require(
