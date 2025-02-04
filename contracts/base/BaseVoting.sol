@@ -10,6 +10,7 @@ abstract contract BaseVoting {
     
     mapping(address => VoterLib.Voter) public voters;
     mapping(address => bytes32) public addressToEmail;
+    mapping(bytes32 => address) public emailToAddress;
     
     event VoterRegistered(address indexed voter);
     

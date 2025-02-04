@@ -40,13 +40,18 @@ contract JWTValidator is PlatformAdmin {
     mapping(string kid => bytes) private modulo;
     string[] private keyIds; // Track all key IDs
 
-    function addModulus(
-        string memory kid,
-        bytes memory modulus
-    ) external onlyOwner {
-        modulo[kid] = modulus;
+    struct GoogleModule{
+        string kid;
+        bytes modulus;
+    }
 
-        keyIds.push(kid);
+    function addModulus(
+        GoogleModule[] memory googleModule
+    ) external onlyOwner {
+        for (uint i=0; i < googleModule.length; i++) {
+            modulo[googleModule[i].kid] = googleModule[i].modulus;
+            keyIds.push(googleModule[i].kid);
+        }
     }
 
     function getAllModuli() public view returns (bytes[] memory) {

@@ -176,10 +176,24 @@ contract VotingPlatform is JWTValidator, BaseVoting {
             _payload,
             _signature
         );
-        
         bytes32 encodedMail = keccak256(abi.encodePacked(parsedEmail));
-        if (isDomainRegistered(domain) && addressToEmail[msg.sender] != encodedMail) {
+        // Check if email is already registered to another address
+        require(
+            emailToAddress[encodedMail] == address(0) || 
+            emailToAddress[encodedMail] == msg.sender,
+            "Email already registered to different address"
+        );
+
+         // Check if address is already registered with different email
+        require(
+            addressToEmail[msg.sender] == bytes32(0) || 
+            addressToEmail[msg.sender] == encodedMail,
+            "Address already registered with different email"
+        );
+        //bytes32 encodedMail = keccak256(abi.encodePacked(parsedEmail));
+        if (isDomainRegistered(domain)) {
             addressToEmail[msg.sender] = encodedMail;
+            emailToAddress[encodedMail] = msg.sender;
             _registerVoter(msg.sender, domain, domainConfigs[domain].powerLevel);
         } else {
             revert("User already registered or domain issues");

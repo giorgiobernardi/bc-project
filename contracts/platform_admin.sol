@@ -4,10 +4,11 @@ pragma solidity ^0.8.28;
 
 import "./libraries/DomainLib.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "hardhat/console.sol";
 
-contract PlatformAdmin is Ownable {
+contract PlatformAdmin is Ownable, ReentrancyGuard {
     using DomainLib for DomainLib.DomainConfig;
 
     string[] public domainList;
@@ -22,6 +23,7 @@ contract PlatformAdmin is Ownable {
 
     event DomainExpired(string domain, uint256 expiryDate);
     event DomainRenewed(string domain, uint256 newExpirationDate);
+    event FeesWithdrawn(address indexed owner, uint256 amount);
 
 
     constructor(address _admin, address _owner) Ownable(_owner) {
@@ -60,28 +62,39 @@ contract PlatformAdmin is Ownable {
         admin = _admin;
     }
 
-    function renewDomain(string memory _domain) public payable hasPaid {
-       require(isDomainRegistered(_domain), "Domain not registered");
+    function renewDomain(string calldata _domain) public payable hasPaid{
+        console.log("exp date:",domainConfigs[_domain].expiryDate);
+        require(hasDomainExpired(_domain), "Domain not expired");
 
         DomainLib.DomainConfig storage config = domainConfigs[_domain];
         config.expiryDate = block.timestamp + REGISTRATION_DURATION;
     }
 
-    function withdrawFees() public onlyOwner {
-        payable(msg.sender).transfer(address(this).balance);
+    function withdrawFees() public onlyOwner nonReentrant {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No fees to withdraw");
+        
+        (bool success, ) = payable(msg.sender).call{value: balance}("");
+        require(success, "Transfer failed");
+        
+        emit FeesWithdrawn(msg.sender, balance);
     }
 
     function getDomains() external view returns (string[] memory) {
+        console.log("Getting domainList");
         return domainList;
+    }
+
+    function hasDomainExpired(string calldata _domain) public view returns (bool) {
+        return (domainConfigs[_domain].expiryDate < block.timestamp && 
+            domainConfigs[_domain].expiryDate > 0);
     }
 
     function isDomainRegistered(
         string memory _domain
     ) internal view returns (bool) {
         for (uint i = 0; i < domainList.length; i++) {
-            if (keccak256(bytes(domainList[i])) == keccak256(bytes(_domain))) {
-                console.log("Domain expiry: ", domainConfigs[_domain].expiryDate);
-                console.log("Domain: ", _domain);   
+            if (keccak256(bytes(domainList[i])) == keccak256(bytes(_domain))) { 
                 return domainConfigs[_domain].expiryDate > block.timestamp;
             }
         }
@@ -99,7 +112,7 @@ contract PlatformAdmin is Ownable {
     ) public payable hasPaid {
         require(_powerLevel > 0, "Power level must be positive");
         require(!isDomainRegistered(_domain), "Domain already registered");
-
+        
         if (bytes(_parentDomain).length > 0) {
             require(
                 domainConfigs[_parentDomain].expiryDate >= block.timestamp,
