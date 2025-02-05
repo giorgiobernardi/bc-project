@@ -14,7 +14,7 @@ abstract contract BaseVoting {
     
     event VoterRegistered(address indexed voter);
     
-    function _registerVoter(address _voter, string memory _domain, uint256 _power) internal {
+    function _registerVoter(address _voter, string memory _domain, uint128 _power) internal {
         voters[_voter] = VoterLib.Voter({
             votingPower: _power,
             emailDomain: _domain,

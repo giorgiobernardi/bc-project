@@ -4,8 +4,8 @@ pragma solidity ^0.8.28;
 library ProposalLib {
     struct Proposal {
         string ipfsHash;
-        uint256 votedYes;
-        uint256 votedNo;
+        uint128 votedYes; 
+        uint128 votedNo; 
         uint256 endTime;
         string domain;
         bool restrictToDomain;
