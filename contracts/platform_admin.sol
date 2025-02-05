@@ -6,8 +6,6 @@ import "./libraries/DomainLib.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import "hardhat/console.sol";
-
 contract PlatformAdmin is Ownable, ReentrancyGuard {
     using DomainLib for DomainLib.DomainConfig;
 
@@ -77,7 +75,6 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
     }
 
     function renewDomain(string calldata _domain) public payable whenNotPaused hasPaid{
-        console.log("exp date:",domainConfigs[_domain].expiryDate);
         require(hasDomainExpired(_domain), "Domain not expired");
 
         DomainLib.DomainConfig storage config = domainConfigs[_domain];
@@ -95,7 +92,6 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
     }
 
     function getDomains() external view whenNotPaused returns (string[] memory) {
-        console.log("Getting domainList");
         return domainList;
     }
 
@@ -140,9 +136,7 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
             powerLevel: _powerLevel,
             expiryDate: block.timestamp + REGISTRATION_DURATION
         });
-        console.log("Domain expiry: ", domainConfigs[_domain].expiryDate);
-        console.log("Domain added: ", _domain);
-        
+      
         if (bytes(_parentDomain).length > 0) {
             parentDomains[_domain] = _parentDomain;
         }

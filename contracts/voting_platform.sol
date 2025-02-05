@@ -5,9 +5,6 @@ import "./jwt_validator.sol";
 import "./libraries/ProposalLib.sol";
 import "./base/BaseVoting.sol";
 
-
-import "hardhat/console.sol";
-
 contract VotingPlatform is JWTValidator, BaseVoting {
     
     using Base64 for string;
@@ -94,10 +91,6 @@ contract VotingPlatform is JWTValidator, BaseVoting {
         // Check if domain is approved
         VoterLib.Voter storage voter = voters[_voterAddress];
         uint256 proposalExpiryDate = block.timestamp+votingPeriod;
-        console.log("email domain: ", voter.emailDomain);
-        console.log("stored domain: ", domainConfigs[voter.emailDomain].domain);  
-        console.log("expiry date: ", domainConfigs[voter.emailDomain].expiryDate);  
-        console.log("proposal expiry date: ", proposalExpiryDate);
         
         require(
             (domainConfigs[voter.emailDomain].expiryDate) >= proposalExpiryDate, 
