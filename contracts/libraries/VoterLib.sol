@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 library VoterLib {
     struct Voter {
-        uint256 votingPower;
+        uint128 votingPower;
         string emailDomain;
         bool canPropose;
     }

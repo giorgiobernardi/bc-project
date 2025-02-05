@@ -89,7 +89,7 @@ contract VotingPlatform is JWTValidator, BaseVoting {
         string memory _ipfsHash,
         address _voterAddress,
         bool _restrictToDomain
-    ) public onlyAdmin returns (string memory) { // only domain representant
+    ) public onlyAdmin whenNotPaused returns (string memory) { // only domain representant
         
         // Check if domain is approved
         VoterLib.Voter storage voter = voters[_voterAddress];
@@ -117,11 +117,12 @@ contract VotingPlatform is JWTValidator, BaseVoting {
         return _ipfsHash;
     }
 
-    function getAllProposals() public view returns (ProposalLib.Proposal[] memory) {
-        ProposalLib.Proposal[] memory allProposals = new ProposalLib.Proposal[](proposalHashes.length);
+    function getAllProposals() public view whenNotPaused returns (ProposalLib.Proposal[] memory) {
+        uint256 length = proposalHashes.length;
+        ProposalLib.Proposal[] memory allProposals = new ProposalLib.Proposal[](length);
         uint256 validProposalCount = 0;
 
-        for (uint256 i = 0; i < proposalHashes.length; i++) {
+        for (uint256 i = 0; i < length; i++) {
             string memory ipfsHash = proposalHashes[i];
             ProposalLib.Proposal memory proposal = proposals[ipfsHash];
             // if proposal is restricted to domain, only voters from the same domain can access it
@@ -149,7 +150,7 @@ contract VotingPlatform is JWTValidator, BaseVoting {
     function castVote(
         string memory _ipfsHash,
         bool _support
-    ) public canVote(_ipfsHash) {
+    ) public nonReentrant whenNotPaused canVote(_ipfsHash) {
         ProposalLib.Proposal storage proposal = proposals[_ipfsHash];
         
         if (_support) {
@@ -163,13 +164,11 @@ contract VotingPlatform is JWTValidator, BaseVoting {
         votersList.push(msg.sender);
     }
 
-
-
     function registerWithDomain(
         string memory _headerJson,
         string memory _payload,
         bytes memory _signature
-    ) public returns (string memory) {
+    ) public whenNotPaused returns (string memory) {
         // If the voter has not been registered yet, add them to the list addressToEmail
         (string memory domain, string memory parsedEmail) = parseJWT(
             _headerJson,
@@ -205,7 +204,7 @@ contract VotingPlatform is JWTValidator, BaseVoting {
         string memory _headerJson,
         string memory _payloadJson,
         bytes memory _signature
-    ) public view returns (bool) {
+    ) public view whenNotPaused returns (bool) {
         (string memory domain, string memory parsedEmail) = parseJWT(
             _headerJson,
             _payloadJson,

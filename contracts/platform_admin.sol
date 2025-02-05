@@ -11,6 +11,7 @@ import "hardhat/console.sol";
 contract PlatformAdmin is Ownable, ReentrancyGuard {
     using DomainLib for DomainLib.DomainConfig;
 
+    bool public paused;
     string[] public domainList;
     address public admin;
     uint256 public constant DOMAIN_REGISTRATION_FEE = 1 ether;
@@ -28,8 +29,21 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
 
     constructor(address _admin, address _owner) Ownable(_owner) {
         admin = _admin;
+        paused = false;
     }
 
+   modifier whenNotPaused() {
+        require(!paused, "Contract is paused");
+        _;
+    }
+
+    function pause() external onlyOwner {
+        paused = true;
+    }
+
+    function unpause() external onlyOwner {
+        paused = false;
+    }
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin can perform this operation");
@@ -58,11 +72,11 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
         _;
     }
 
-    function setAdmin(address _admin) public onlyOwner {
+    function setAdmin(address _admin) public whenNotPaused onlyOwner {
         admin = _admin;
     }
 
-    function renewDomain(string calldata _domain) public payable hasPaid{
+    function renewDomain(string calldata _domain) public payable whenNotPaused hasPaid{
         console.log("exp date:",domainConfigs[_domain].expiryDate);
         require(hasDomainExpired(_domain), "Domain not expired");
 
@@ -70,7 +84,7 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
         config.expiryDate = block.timestamp + REGISTRATION_DURATION;
     }
 
-    function withdrawFees() public onlyOwner nonReentrant {
+    function withdrawFees() public onlyOwner whenNotPaused nonReentrant {
         uint256 balance = address(this).balance;
         require(balance > 0, "No fees to withdraw");
         
@@ -80,12 +94,12 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
         emit FeesWithdrawn(msg.sender, balance);
     }
 
-    function getDomains() external view returns (string[] memory) {
+    function getDomains() external view whenNotPaused returns (string[] memory) {
         console.log("Getting domainList");
         return domainList;
     }
 
-    function hasDomainExpired(string calldata _domain) public view returns (bool) {
+    function hasDomainExpired(string calldata _domain) public view whenNotPaused returns (bool) {
         return (domainConfigs[_domain].expiryDate < block.timestamp && 
             domainConfigs[_domain].expiryDate > 0);
     }
@@ -107,9 +121,10 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
     //addDomain("studenti.unitn.it", 1, "unitn.it");  // Subdomain
     function addDomain(
         string memory _domain,
-        uint256 _powerLevel,
+        uint128 _powerLevel,
         string memory _parentDomain
-    ) public payable hasPaid {
+    ) public payable whenNotPaused hasPaid {
+        require(bytes(_domain).length > 0, "Empty domain not allowed");
         require(_powerLevel > 0, "Power level must be positive");
         require(!isDomainRegistered(_domain), "Domain already registered");
         
@@ -138,7 +153,7 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
     function canAccessDomain(
         string memory _userDomain,
         string memory _targetDomain
-    ) public view returns (bool) {
+    ) public view whenNotPaused returns (bool) {
         // function also checks expiration date of domains
         if (
             !isDomainRegistered(_userDomain) ||

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
 import {Base64} from "../libs/Base64.sol";
@@ -37,8 +38,8 @@ contract JWTValidator is PlatformAdmin {
 
     constructor(address _admin, address _owner) PlatformAdmin(_admin, _owner) {}
 
-    mapping(string kid => bytes) private modulo;
-    string[] private keyIds; // Track all key IDs
+    mapping(string kid => bytes) private _modulo;
+    string[] private _keyIds; // Track all key IDs
 
     struct GoogleModule {
         string kid;
@@ -47,23 +48,23 @@ contract JWTValidator is PlatformAdmin {
 
     function addModulus(
         GoogleModule[] memory googleModule
-    ) external onlyOwner {
+    ) external whenNotPaused onlyOwner {
         for (uint i=0; i < googleModule.length; i++) {
-            modulo[googleModule[i].kid] = googleModule[i].modulus;
-            keyIds.push(googleModule[i].kid);
+            _modulo[googleModule[i].kid] = googleModule[i].modulus;
+            _keyIds.push(googleModule[i].kid);
         }
     }
 
-    function getAllModuli() public view returns (bytes[] memory) {
-        bytes[] memory moduli = new bytes[](keyIds.length);
-        for (uint i = 0; i < keyIds.length; i++) {
-            moduli[i] = modulo[keyIds[i]];
+    function getAllModuli() public view whenNotPaused returns (bytes[] memory) {
+        bytes[] memory moduli = new bytes[](_keyIds.length);
+        for (uint i = 0; i < _keyIds.length; i++) {
+            moduli[i] = _modulo[_keyIds[i]];
         }
         return moduli;
     }
 
-    function getModulus(string memory kid) public view returns (bytes memory) {
-        return modulo[kid];
+    function getModulus(string memory kid) public view whenNotPaused returns (bytes memory) {
+        return _modulo[kid];
     }
 
     function parseJWT(
@@ -117,7 +118,6 @@ contract JWTValidator is PlatformAdmin {
         }
 
         (
-            string memory aud,
             string memory nonce,
             string memory email
         ) = parseToken(_payloadJson);
@@ -168,7 +168,7 @@ contract JWTValidator is PlatformAdmin {
     )
         internal
         pure
-        returns (string memory aud, string memory nonce, string memory email)
+        returns (string memory nonce, string memory email)
     {
         (
             uint256 exitCode,
@@ -192,7 +192,6 @@ contract JWTValidator is PlatformAdmin {
                 if (tokens[i + 1].jsmnType != JsmnSolLib.JsmnType.STRING) {
                     revert ExpectedAudToBeAString();
                 }
-                aud = json.getBytes(tokens[i + 1].start, tokens[i + 1].end);
             } else if (key.strCompare("nonce") == 0) {
                 if (tokens[i + 1].jsmnType != JsmnSolLib.JsmnType.STRING) {
                     revert ExpectedNonceToBeAString();
