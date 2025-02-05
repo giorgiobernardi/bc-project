@@ -40,7 +40,7 @@ contract JWTValidator is PlatformAdmin {
     mapping(string kid => bytes) private modulo;
     string[] private keyIds; // Track all key IDs
 
-    struct GoogleModule{
+    struct GoogleModule {
         string kid;
         bytes modulus;
     }
