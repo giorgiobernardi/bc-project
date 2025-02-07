@@ -112,7 +112,7 @@ describe("VotingPlatform", function () {
       );
 
       const voter = await votingPlatform.read.voters([owner]);
-      expect(voter[1]).to.equal("studenti.unitn.it");
+      expect(voter[2]).to.equal("studenti.unitn.it");
     });
   });
 
