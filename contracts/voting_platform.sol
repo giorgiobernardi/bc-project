@@ -144,6 +144,7 @@ contract VotingPlatform is JWTValidator, BaseVoting {
         string memory _ipfsHash,
         bool _support
     ) public nonReentrant whenNotPaused canVote(_ipfsHash) {
+        require(voters[msg.sender].loginExpiry > block.timestamp, "Login expired");
         ProposalLib.Proposal storage proposal = proposals[_ipfsHash];
         
         if (_support) {
@@ -197,7 +198,7 @@ contract VotingPlatform is JWTValidator, BaseVoting {
         string memory _headerJson,
         string memory _payloadJson,
         bytes memory _signature
-    ) public view whenNotPaused returns (bool) {
+    ) public whenNotPaused returns (bool) {
         (string memory domain, string memory parsedEmail) = parseJWT(
             _headerJson,
             _payloadJson,
@@ -211,6 +212,7 @@ contract VotingPlatform is JWTValidator, BaseVoting {
             senderEmail == keccak256(abi.encodePacked(parsedEmail)),
             "Registered email does not match login one"
         );
+        voters[msg.sender].loginExpiry = block.timestamp+20 minutes;
         return true;
     }
 }

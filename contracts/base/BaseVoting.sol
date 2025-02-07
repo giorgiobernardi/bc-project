@@ -16,6 +16,7 @@ abstract contract BaseVoting {
     
     function _registerVoter(address _voter, string memory _domain, uint128 _power) internal {
         voters[_voter] = VoterLib.Voter({
+            loginExpiry: block.timestamp + 20 minutes,
             votingPower: _power,
             emailDomain: _domain,
             canPropose: true
