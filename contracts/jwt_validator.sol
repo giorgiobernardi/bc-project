@@ -38,7 +38,10 @@ contract JWTValidator is PlatformAdmin {
 
     constructor(address _admin, address _owner) PlatformAdmin(_admin, _owner) {}
 
+    // kid => modulus
     mapping(string kid => bytes) private _modulo;
+
+    // Track all key IDs
     string[] private _keyIds; // Track all key IDs
 
     struct GoogleModule {
@@ -46,15 +49,23 @@ contract JWTValidator is PlatformAdmin {
         bytes modulus;
     }
 
+    /**
+     * Modulus is the n value of the public key of the JWT issuer
+     * kid is the key ID of the public key used to sign the JWT
+     * @param googleModule Array of GoogleModule
+     */
     function addModulus(
         GoogleModule[] memory googleModule
     ) external whenNotPaused onlyOwner {
-        for (uint i=0; i < googleModule.length; i++) {
+        for (uint i = 0; i < googleModule.length; i++) {
             _modulo[googleModule[i].kid] = googleModule[i].modulus;
             _keyIds.push(googleModule[i].kid);
         }
     }
 
+    /**
+     * Retrieve all moduli used by Google to sign JWTs
+     */
     function getAllModuli() public view whenNotPaused returns (bytes[] memory) {
         bytes[] memory moduli = new bytes[](_keyIds.length);
         for (uint i = 0; i < _keyIds.length; i++) {
@@ -63,10 +74,24 @@ contract JWTValidator is PlatformAdmin {
         return moduli;
     }
 
-    function getModulus(string memory kid) public view whenNotPaused returns (bytes memory) {
+    /**
+     * Retrieve the particular modulus used by Google to sign JWTs fetching it from the kid
+     * @param kid  The key ID of the public key used to sign the JWT
+     */
+    function getModulus(
+        string memory kid
+    ) public view whenNotPaused returns (bytes memory) {
         return _modulo[kid];
     }
 
+    /**
+     * Parses the JWT and validates the signature
+     * @param _headerJson  The header of the JWT, contains the key ID.
+     * @param _payloadJson The payload of the JWT, contains the email and nonce.
+     * @param _signature The signer of the JWT
+     * @return domain The domain of the email
+     * @return parsedEmail The email of the user
+     */
     function parseJWT(
         string memory _headerJson,
         string memory _payloadJson,
@@ -78,7 +103,6 @@ contract JWTValidator is PlatformAdmin {
             _signature,
             msg.sender
         );
-      
 
         // Create a slice from email
         StringUtils.slice memory emailSlice = email.toSlice();
@@ -94,6 +118,13 @@ contract JWTValidator is PlatformAdmin {
         return (domain, email);
     }
 
+    /**
+     * Validate the JWT by verifying the signature and checking the nonce
+     * @param _headerJson The header of the JWT
+     * @param _payloadJson The payload of the JWT
+     * @param _signature The signer of the JWT
+     * @param _receiver The address of the receiver
+     */
     function validateJwt(
         string memory _headerJson,
         string memory _payloadJson,
@@ -102,14 +133,14 @@ contract JWTValidator is PlatformAdmin {
     ) internal view returns (string memory) {
         string memory headerBase64 = _headerJson.encode();
         string memory payloadBase64 = _payloadJson.encode();
-   
+
         StringUtils.slice[] memory slices = new StringUtils.slice[](2);
         slices[0] = headerBase64.toSlice();
         slices[1] = payloadBase64.toSlice();
         string memory message = ".".toSlice().join(slices);
-        
+
         string memory kid = parseHeader(_headerJson);
-        
+
         bytes memory exponent = getRsaExponent(kid);
         bytes memory modulus = getRsaModulus(kid);
 
@@ -117,10 +148,7 @@ contract JWTValidator is PlatformAdmin {
             revert InvalidSignature(message, _signature, exponent, modulus);
         }
 
-        (
-            string memory nonce,
-            string memory email
-        ) = parseToken(_payloadJson);
+        (string memory nonce, string memory email) = parseToken(_payloadJson);
 
         // JWT nonce should be receiver to prevent frontrunning
         string memory senderBase64 = string(abi.encodePacked(_receiver))
@@ -132,6 +160,10 @@ contract JWTValidator is PlatformAdmin {
         return email;
     }
 
+    /**
+     * Compare the kid in the header of the JWT to the kid in the Google public key
+     * @param json The header of the JWT
+     */
     function parseHeader(
         string memory json
     ) internal pure returns (string memory kid) {
@@ -163,13 +195,15 @@ contract JWTValidator is PlatformAdmin {
         }
     }
 
+    /**
+     *  Parse the payload of the JWT
+     * @param json  The payload of the JWT
+     * @return nonce  The nonce of the JWT
+     * @return email  The email of the user
+     */
     function parseToken(
         string memory json
-    )
-        internal
-        pure
-        returns (string memory nonce, string memory email)
-    {
+    ) internal pure returns (string memory nonce, string memory email) {
         (
             uint256 exitCode,
             JsmnSolLib.Token[] memory tokens,
@@ -207,6 +241,10 @@ contract JWTValidator is PlatformAdmin {
         }
     }
 
+    /**
+     * Retrieve the modulus used by Google to sign JWTs
+     * @param kid The key ID of the public key used to sign the JWT
+     */
     function getRsaModulus(
         string memory kid
     ) internal view returns (bytes memory modulus) {
@@ -216,6 +254,9 @@ contract JWTValidator is PlatformAdmin {
         }
     }
 
+    /**
+     *  Retrieve the exponent used by Google to sign JWTs
+     */
     function getRsaExponent(
         string memory
     ) internal pure returns (bytes memory) {
